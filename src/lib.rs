@@ -369,6 +369,21 @@ impl PyPointCloud {
         Ok(PyPointCloud { inner: result })
     }
 
+    #[pyo3(signature = (name, op, values, inclusive = true))]
+    fn select_where(
+        &self,
+        name: &str,
+        op: &str,
+        values: Vec<f64>,
+        inclusive: bool,
+    ) -> PyResult<Self> {
+        let result = self
+            .inner
+            .select_where(name, op, &values, inclusive)
+            .map_err(PyErr::from)?;
+        Ok(PyPointCloud { inner: result })
+    }
+
     fn select_intensity_range(&self, lo: f32, hi: f32) -> PyResult<Self> {
         let result = self
             .inner
@@ -405,6 +420,41 @@ impl PyPointCloud {
 
     fn aabb(&self) -> ([f32; 3], [f32; 3]) {
         self.inner.aabb()
+    }
+
+    fn crop_obb(
+        &self,
+        center: Vec<f32>,
+        extents: Vec<f32>,
+        rotation: Vec<Vec<f32>>,
+    ) -> PyResult<Self> {
+        if center.len() != 3 || extents.len() != 3 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "center and extents must both have length 3",
+            ));
+        }
+        if rotation.len() != 3 || !rotation.iter().all(|row| row.len() == 3) {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "rotation must be 3x3",
+            ));
+        }
+        let result = self
+            .inner
+            .crop_obb(
+                [center[0], center[1], center[2]],
+                [extents[0], extents[1], extents[2]],
+                [
+                    [rotation[0][0], rotation[0][1], rotation[0][2]],
+                    [rotation[1][0], rotation[1][1], rotation[1][2]],
+                    [rotation[2][0], rotation[2][1], rotation[2][2]],
+                ],
+            )
+            .map_err(PyErr::from)?;
+        Ok(PyPointCloud { inner: result })
+    }
+
+    fn obb(&self) -> ([f32; 3], [f32; 3], [[f32; 3]; 3]) {
+        self.inner.obb()
     }
 
     // === Neighbors, normals, outliers ===

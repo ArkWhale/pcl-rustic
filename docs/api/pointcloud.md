@@ -42,14 +42,18 @@ Reserved LAS-oriented names include `intensity`, `red`, `green`, `blue`,
 
 ```python
 ground = pc.select_by_classification([2])
+semantic = pc.select_where("classification", "in", [2, 6])
 first_returns = pc.select_return_number(1)
 bright = pc.select_intensity_range(0.4, 1.0)
 low = pc.select_elevation_range(-2.0, 1.0)
 tile = pc.crop_aabb([0, 0, -5], [10, 10, 5])
+center, extents, rotation = pc.obb()
+oriented_tile = pc.crop_obb(center, extents, rotation)
 ```
 
 `select(mask)` accepts a boolean NumPy mask. `select_indices(indices)` preserves
-input order.
+input order. `select_where(name, op, values, inclusive=True)` supports `eq`,
+`in`, `range`, `gt`, `ge`, `lt`, and `le`.
 
 ## Concatenation
 
@@ -100,4 +104,3 @@ print(pc.device())
 
 Tensor-backed coordinate operations use Burn devices. Attribute vectors remain
 host-side to preserve typed LAS attributes.
-

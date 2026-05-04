@@ -11,7 +11,7 @@ examples, and automation.
 | RFC | Status | Summary |
 |---|---|---|
 | RFC-0002 API Reset & Typed Attributes | Partial | Typed attributes and new downsample strategies exist, but attributes are host `Vec<T>` storage and zero-copy getters / getter benchmarks are not implemented. |
-| RFC-0003 Coordinate Ops & Selection | Partial | Selection, feature filters, AABB crop, concat, transform wrappers, and examples exist; `select_where`, OBB APIs, LAS-fixture coverage, and device-native selection are missing. |
+| RFC-0003 Coordinate Ops & Selection | Partial | Selection, generic attribute filters, AABB/OBB crop, concat, transform wrappers, and examples exist; LAS-fixture coverage and device-native selection are still missing. |
 | RFC-0004 GPU Hot Path | Mostly missing | Device transfer hooks exist, but voxel downsample, selection, concat, and benchmarks remain CPU/reference paths. |
 | RFC-0005 KD-tree, Octree, Normals | Partial | KD-tree, fallback, octree, Python APIs, normals, and covariance support exist; acceptance-level benchmarks, cache tests, and stronger oracle tests are missing. |
 | RFC-0006 Outlier Removal | Partial | SOR/ROR APIs and masks exist with basic tests/docs; acceptance coverage, same-device mask contract, LAS propagation tests, and 10M benchmark are missing. |
@@ -41,12 +41,15 @@ examples, and automation.
 - Implemented and exposed:
   - `select(mask)`
   - `select_indices(indices)`
+  - `select_where(name, op, values, inclusive=True)`
   - `select_by_classification(codes)`
   - `select_return_number(n)`
   - `select_intensity_range(lo, hi)`
   - `select_elevation_range(lo, hi)`
   - `crop_aabb(min, max)`
   - `aabb()`
+  - `crop_obb(center, extents, rotation)`
+  - `obb()`
   - `PointCloud.concatenate(clouds, policy)`
   - `translate`, `scale`, `rotate`, `rigid_transform`, `transform`
 - `PointCloud.concatenate` supports `strict`, `union`, and `intersection`.
@@ -158,8 +161,6 @@ examples, and automation.
 
 ### RFC-0003
 
-- Generic `select_where` is absent.
-- `crop_obb` and `obb()` are absent.
 - Selection and concat are host-vector implementations, not device-resident
   tensor gather/cat operations.
 - Tests are synthetic; no `tests/data` LAS fixture was found.
@@ -242,6 +243,11 @@ The RFC-0009 implementation slice also ran focused verification:
 - A matrix sanity script confirmed RFC-0009 smoke, standard, and full case
   definitions.
 - `tools/render_benchmark_docs.py` was exercised against an empty CSV directory.
+- RFC-0003 selection/OBB focused checks:
+  - `cargo fmt`
+  - `uv run ruff format tests/test_point_cloud.py`
+  - `cargo test selection --lib`
+  - `uv run pytest tests/test_point_cloud.py::TestSelectionAndConcatenation::test_feature_and_spatial_selection -v --no-cov`
 
 Note: a prior local shell did not have `just` installed, so `just test` /
 `just ci` could not be invoked directly in that session. Equivalent steps were
@@ -253,8 +259,9 @@ run manually then. CI installs `just` before invoking `just ci`.
    benchmark matrix.
 2. Replace staged point-to-plane/GICP updates with their actual solvers and add
    the required comparison/scale tests.
-3. Close strict RFC-0003 gaps: `select_where`, `crop_obb`, `obb()`, LAS fixture
-   tests, and stronger concat coverage.
+3. Close remaining strict RFC-0003 gaps: LAS fixture tests, empty input,
+   single-cloud concat, intersection policy, LAS classification round-trip, and
+   device-native selection.
 4. Decide whether RFC-0002 should remain host-typed attributes by design or move
    to literal tensor-backed typed attributes and zero-copy getters.
 5. Strengthen RFC-0005/RFC-0006 acceptance tests and publish the required

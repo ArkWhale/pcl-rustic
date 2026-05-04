@@ -2,12 +2,58 @@ use crate::point_cloud::attribute_value::AttributeValue;
 use crate::point_cloud::core::HighPerformancePointCloud;
 use crate::utils::error::{PointCloudError, Result};
 use crate::utils::tensor;
+use nalgebra::{Matrix3, SymmetricEigen, Vector3};
 use std::collections::{HashMap, HashSet};
 
 use crate::ConcatPolicy;
 
 impl HighPerformancePointCloud {
     // === Feature-based selection ===
+
+    pub fn select_where(
+        &self,
+        name: &str,
+        op: &str,
+        values: &[f64],
+        inclusive: bool,
+    ) -> Result<Self> {
+        let attr = self.get_attribute(name).ok_or_else(|| {
+            PointCloudError::InvalidParameter(format!("point cloud has no '{}' attribute", name))
+        })?;
+        if values.is_empty() {
+            return Err(PointCloudError::InvalidParameter(
+                "values must not be empty".to_string(),
+            ));
+        }
+        let mask = match attr {
+            AttributeValue::F32(data) => {
+                numeric_mask(data.iter().map(|&v| v as f64), op, values, inclusive)?
+            }
+            AttributeValue::F64(data) => numeric_mask(data.iter().copied(), op, values, inclusive)?,
+            AttributeValue::U8(data) => {
+                numeric_mask(data.iter().map(|&v| v as f64), op, values, inclusive)?
+            }
+            AttributeValue::U16(data) => {
+                numeric_mask(data.iter().map(|&v| v as f64), op, values, inclusive)?
+            }
+            AttributeValue::U32(data) => {
+                numeric_mask(data.iter().map(|&v| v as f64), op, values, inclusive)?
+            }
+            AttributeValue::I32(data) => {
+                numeric_mask(data.iter().map(|&v| v as f64), op, values, inclusive)?
+            }
+            AttributeValue::I64(data) => {
+                numeric_mask(data.iter().map(|&v| v as f64), op, values, inclusive)?
+            }
+            AttributeValue::Bool(data) => bool_mask(data, op, values)?,
+            AttributeValue::F32x6(_) => {
+                return Err(PointCloudError::InvalidParameter(
+                    "select_where does not support float32[6] attributes".to_string(),
+                ))
+            }
+        };
+        self.select_mask(&mask)
+    }
 
     pub fn select_by_classification(&self, codes: &[u8]) -> Result<Self> {
         let attr = self.get_attribute("classification").ok_or_else(|| {
@@ -91,6 +137,95 @@ impl HighPerformancePointCloud {
             }
         }
         (min, max)
+    }
+
+    pub fn crop_obb(
+        &self,
+        center: [f32; 3],
+        extents: [f32; 3],
+        rotation: [[f32; 3]; 3],
+    ) -> Result<Self> {
+        if extents.iter().any(|&v| v < 0.0 || !v.is_finite()) {
+            return Err(PointCloudError::InvalidParameter(
+                "extents must be finite and non-negative".to_string(),
+            ));
+        }
+        let axes = Matrix3::from_columns(&[
+            Vector3::new(rotation[0][0], rotation[1][0], rotation[2][0]),
+            Vector3::new(rotation[0][1], rotation[1][1], rotation[2][1]),
+            Vector3::new(rotation[0][2], rotation[1][2], rotation[2][2]),
+        ]);
+        let center = Vector3::new(center[0], center[1], center[2]);
+        let half = Vector3::new(extents[0] * 0.5, extents[1] * 0.5, extents[2] * 0.5);
+        let mask: Vec<bool> = self
+            .get_xyz_vec()
+            .iter()
+            .map(|p| {
+                let local = axes.transpose() * (Vector3::new(p[0], p[1], p[2]) - center);
+                local[0].abs() <= half[0] && local[1].abs() <= half[1] && local[2].abs() <= half[2]
+            })
+            .collect();
+        self.select_mask(&mask)
+    }
+
+    pub fn obb(&self) -> ([f32; 3], [f32; 3], [[f32; 3]; 3]) {
+        let xyz = self.get_xyz_vec();
+        if xyz.is_empty() {
+            return ([0.0; 3], [0.0; 3], identity_rotation());
+        }
+        if xyz.len() < 3 {
+            let (min, max) = self.aabb();
+            let center = [
+                (min[0] + max[0]) * 0.5,
+                (min[1] + max[1]) * 0.5,
+                (min[2] + max[2]) * 0.5,
+            ];
+            let extents = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+            return (center, extents, identity_rotation());
+        }
+
+        let centroid = xyz.iter().fold(Vector3::zeros(), |acc, p| {
+            acc + Vector3::new(p[0], p[1], p[2])
+        }) / xyz.len() as f32;
+        let mut cov = Matrix3::zeros();
+        for p in &xyz {
+            let d = Vector3::new(p[0], p[1], p[2]) - centroid;
+            cov += d * d.transpose();
+        }
+        cov /= xyz.len() as f32;
+
+        let eigen = SymmetricEigen::new(cov);
+        let mut axes = eigen.eigenvectors;
+        if axes.determinant() < 0.0 {
+            axes.column_mut(2).scale_mut(-1.0);
+        }
+
+        let mut min = [f32::INFINITY; 3];
+        let mut max = [f32::NEG_INFINITY; 3];
+        for p in &xyz {
+            let local = axes.transpose() * (Vector3::new(p[0], p[1], p[2]) - centroid);
+            for axis in 0..3 {
+                min[axis] = min[axis].min(local[axis]);
+                max[axis] = max[axis].max(local[axis]);
+            }
+        }
+        let local_center = Vector3::new(
+            (min[0] + max[0]) * 0.5,
+            (min[1] + max[1]) * 0.5,
+            (min[2] + max[2]) * 0.5,
+        );
+        let world_center = centroid + axes * local_center;
+        let extents = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+
+        (
+            [world_center[0], world_center[1], world_center[2]],
+            extents,
+            [
+                [axes[(0, 0)], axes[(0, 1)], axes[(0, 2)]],
+                [axes[(1, 0)], axes[(1, 1)], axes[(1, 2)]],
+                [axes[(2, 0)], axes[(2, 1)], axes[(2, 2)]],
+            ],
+        )
     }
 
     // === Concatenation ===
@@ -190,4 +325,63 @@ impl HighPerformancePointCloud {
         *result.attributes_mut() = new_attrs;
         Ok(result)
     }
+}
+
+fn numeric_mask<I>(data: I, op: &str, values: &[f64], inclusive: bool) -> Result<Vec<bool>>
+where
+    I: Iterator<Item = f64>,
+{
+    match op {
+        "eq" => Ok(data.map(|v| v == values[0]).collect()),
+        "in" => Ok(data.map(|v| values.contains(&v)).collect()),
+        "range" => {
+            if values.len() < 2 {
+                return Err(PointCloudError::InvalidParameter(
+                    "range requires [lo, hi] values".to_string(),
+                ));
+            }
+            let lo = values[0];
+            let hi = values[1];
+            Ok(data
+                .map(|v| {
+                    if inclusive {
+                        v >= lo && v <= hi
+                    } else {
+                        v > lo && v < hi
+                    }
+                })
+                .collect())
+        }
+        "gt" => Ok(data.map(|v| v > values[0]).collect()),
+        "ge" => Ok(data.map(|v| v >= values[0]).collect()),
+        "lt" => Ok(data.map(|v| v < values[0]).collect()),
+        "le" => Ok(data.map(|v| v <= values[0]).collect()),
+        _ => Err(PointCloudError::InvalidParameter(
+            "op must be one of 'eq', 'in', 'range', 'gt', 'ge', 'lt', or 'le'".to_string(),
+        )),
+    }
+}
+
+fn bool_mask(data: &[bool], op: &str, values: &[f64]) -> Result<Vec<bool>> {
+    match op {
+        "eq" => {
+            let expected = values[0] != 0.0;
+            Ok(data.iter().map(|&v| v == expected).collect())
+        }
+        "in" => {
+            let accepts_true = values.iter().any(|&v| v != 0.0);
+            let accepts_false = values.contains(&0.0);
+            Ok(data
+                .iter()
+                .map(|&v| if v { accepts_true } else { accepts_false })
+                .collect())
+        }
+        _ => Err(PointCloudError::InvalidParameter(
+            "bool select_where only supports 'eq' and 'in'".to_string(),
+        )),
+    }
+}
+
+fn identity_rotation() -> [[f32; 3]; 3] {
+    [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
 }

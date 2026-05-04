@@ -118,7 +118,9 @@ class TestPointCloudProperties:
             "classification": np.array([1, 2, 2], dtype=np.uint8),
         }
         pc = PointCloud.from_numpy(data)
-        np.testing.assert_array_equal(pc.get_attribute("classification"), data["classification"])
+        np.testing.assert_array_equal(
+            pc.get_attribute("classification"), data["classification"]
+        )
 
     def test_add_duplicate_attribute_fails(self):
         """测试添加重复属性时失败"""
@@ -251,12 +253,19 @@ class TestSelectionAndConcatenation:
         pc.set_intensity(np.array([0.1, 0.4, 0.7, 1.0], dtype=np.float32))
 
         assert pc.select(np.array([True, False, True, False])).point_count() == 2
+        assert pc.select_where("classification", "in", [2.0, 6.0]).point_count() == 3
+        assert pc.select_where("intensity", "range", [0.3, 0.8]).point_count() == 2
         assert pc.select_by_classification([2]).point_count() == 2
         assert pc.select_return_number(1).point_count() == 2
         assert pc.select_intensity_range(0.3, 0.8).point_count() == 2
         assert pc.select_elevation_range(0.5, 2.5).point_count() == 2
         assert pc.crop_aabb([0.5, 0.5, 0.5], [2.5, 2.5, 2.5]).point_count() == 2
         assert pc.aabb() == ([0.0, 0.0, 0.0], [3.0, 3.0, 3.0])
+        center, extents, rotation = pc.obb()
+        assert len(center) == 3
+        assert len(extents) == 3
+        assert np.asarray(rotation, dtype=np.float32).shape == (3, 3)
+        assert pc.crop_obb(center, extents, rotation).point_count() == 4
 
     def test_concatenate_policies(self):
         pc1 = PointCloud.from_xyz(np.zeros((2, 3), dtype=np.float32))
@@ -344,7 +353,9 @@ class TestVoxelDownsample:
         np.testing.assert_array_equal(a.get_xyz(), b.get_xyz())
 
     def test_average_downsample_modes_integer_attributes(self):
-        xyz = np.array([[0.0, 0.0, 0.0], [0.2, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=np.float32)
+        xyz = np.array(
+            [[0.0, 0.0, 0.0], [0.2, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=np.float32
+        )
         pc = PointCloud.from_xyz(xyz)
         pc.set_attribute("classification", np.array([2, 2, 6], dtype=np.uint8))
         down = pc.voxel_downsample(1.0, DownsampleStrategy.AVERAGE)
@@ -363,7 +374,9 @@ class TestNeighborsNormalsOutliersRegistration:
         assert indices.shape == (1, 2)
         assert distances.shape == (1, 2)
         assert indices[0, 0] == 0
-        radius_hits = pc.radius_search(np.array([[0.0, 0.0, 0.0]], dtype=np.float32), 1.1)
+        radius_hits = pc.radius_search(
+            np.array([[0.0, 0.0, 0.0]], dtype=np.float32), 1.1
+        )
         assert set(radius_hits[0].tolist()) == {0, 1, 2}
 
         octree = pc.octree(3)
@@ -412,12 +425,16 @@ class TestNeighborsNormalsOutliersRegistration:
             registration.ICPConvergenceCriteria(20, 1e-7, 1e-7),
         )
         assert result.fitness == 1.0
-        np.testing.assert_allclose(result.transformation[:3, 3], [0.02, -0.03, 0.01], atol=1e-3)
+        np.testing.assert_allclose(
+            result.transformation[:3, 3], [0.02, -0.03, 0.01], atol=1e-3
+        )
         score = registration.evaluate(source, target, 0.2, result.transformation)
         assert score.fitness == 1.0
 
     def test_point_to_plane_and_gicp_require_inputs(self):
-        pc = PointCloud.from_xyz(np.random.default_rng(0).normal(size=(10, 3)).astype(np.float32))
+        pc = PointCloud.from_xyz(
+            np.random.default_rng(0).normal(size=(10, 3)).astype(np.float32)
+        )
         with pytest.raises(ValueError):
             registration.icp(
                 pc,
