@@ -105,6 +105,7 @@ nav:
     - RFC-0006: plans/rfc-0006-2026-04-30-outlier-removal.md
     - RFC-0007: plans/rfc-0007-2026-04-30-icp-gicp-registration.md
     - RFC-0008: plans/rfc-0008-2026-05-04-kdtree-fallback-and-gicp-staging.md
+    - RFC-0009: plans/rfc-0009-2026-05-04-large-scale-benchmark-suite.md
   - 性能:
     - 基准测试: performance/benchmarks.md
     - 优化建议: performance/optimization.md
