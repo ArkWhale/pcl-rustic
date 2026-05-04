@@ -7,6 +7,21 @@ on:
       - "v*.*.*"
   pull_request:
   workflow_dispatch:
+    inputs:
+      benchmark_mode:
+        description: "RFC-0009 benchmark mode for the benchmark job"
+        required: false
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - standard
+          - full
+      allow_expensive_benchmarks:
+        description: "Allow standard/full benchmarks on this runner"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -309,19 +324,13 @@ jobs:
           name: wheels-sdist
           path: dist
 
-  # Run benchmarks (only on tags or manual trigger)
+  # Run RFC-0009 benchmarks. PR/CI uses smoke; manual dispatch can select
+  # standard/full for high-memory benchmark runners.
   benchmark:
-    name: Benchmark / ${{ matrix.platform.os }}
-    runs-on: ${{ matrix.platform.os }}
-    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
+    name: Benchmark / RFC-0009
+    runs-on: ubuntu-22.04
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
     needs: test
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - os: ubuntu-22.04
-          - os: macos-latest
-          - os: windows-latest
 
     steps:
       - uses: actions/checkout@v6
@@ -351,16 +360,23 @@ jobs:
 
       - name: Run benchmarks
         run: |
-          just benchmark
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.benchmark_mode }}" != "smoke" ] && [ "${{ inputs.allow_expensive_benchmarks }}" != "true" ]; then
+              echo "standard/full benchmarks require allow_expensive_benchmarks=true and a high-memory runner"
+              exit 1
+            fi
+            just benchmark-${{ inputs.benchmark_mode }}
+          else
+            just benchmark-smoke
+          fi
 
       - name: Upload benchmark results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmark-results-${{ matrix.platform.os }}-${{ matrix.platform.python-version }}
+          name: benchmark-results-rfc0009
           path: |
-            benchmark-*.txt
-            test-*.log
+            reports/benchmarks/*.csv
           retention-days: 30
           if-no-files-found: ignore
 

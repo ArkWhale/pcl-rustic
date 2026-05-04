@@ -1,270 +1,141 @@
-# 性能基准测试
+# Performance Benchmarks
 
-本页面展示 `pcl-rustic` 在不同平台和配置下的性能表现。
+This page documents the RFC-0009 large-scale benchmark suite. It describes how
+to run the generated suite and how to read its CSV output. It intentionally
+does not publish measured performance numbers unless they come from a
+recorded benchmark run.
 
-## 测试环境
+## Suite Scope
 
-### 硬件配置
+The suite covers two batch workflows:
 
-=== "macOS (M1)"
+- Concatenating many point clouds with typed attributes.
+- Voxel downsampling large point clouds across multiple strategies.
 
-    - **CPU**: Apple M1 (8 核)
-    - **内存**: 16 GB 统一内存
-    - **操作系统**: macOS 14.0
-    - **Python**: 3.11
+Every synthetic cloud uses this schema:
 
-=== "Linux (x64)"
+| Field | dtype | Shape |
+|---|---|---|
+| `xyz` | `float32` | `[N, 3]` |
+| `intensity` | `float32` | `[N]` |
+| `classification` | `uint8` | `[N]` |
+| `return_number` | `uint8` | `[N]` |
+| `gps_time` | `float64` | `[N]` |
 
-    - **CPU**: Intel Core i7-10700K
-    - **内存**: 32 GB DDR4
-    - **操作系统**: Ubuntu 22.04
-    - **Python**: 3.11
+Synthetic data is deterministic. It uses clustered spatial coordinates,
+LAS-style classification codes, return numbers in `1..5`, and monotonic GPS
+time per generated cloud.
 
-=== "Windows (x64)"
+## Modes
 
-    - **CPU**: AMD Ryzen 7 5800X
-    - **内存**: 32 GB DDR4
-    - **操作系统**: Windows 11
-    - **Python**: 3.11
+Run benchmarks through `just`:
 
-## 体素下采样性能
-
-### 10M 点云
-
-测试配置：高斯分布点云，6 维数据（x, y, z, intensity, d1, d2）
-
-| 体素大小 | 输出点数 | 减少率 | 耗时 (s) | 吞吐量 (M/s) |
-|---------|---------|-------|---------|-------------|
-| 0.06m | 8,837,235 | 11.6% | 7.70 | 1.3 |
-| 0.10m | 8,201,442 | 18.0% | 7.32 | 1.4 |
-| 0.15m | 7,870,113 | 21.3% | 7.13 | 1.4 |
-| 0.20m | 7,045,891 | 29.5% | 6.45 | 1.5 |
-
-**关键指标**：
-- 平均吞吐量：**1.4M 点/秒**
-- 内存占用：~2.5 GB
-- CPU 使用率：~85%
-
-### 50M 点云
-
-| 体素大小 | 输出点数 | 减少率 | 耗时 (s) | 吞吐量 (M/s) |
-|---------|---------|-------|---------|-------------|
-| 0.06m | 42,413,821 | 15.2% | 47.82 | 1.0 |
-| 0.10m | 36,892,745 | 26.2% | 41.23 | 1.2 |
-| 0.15m | 32,156,442 | 35.7% | 37.45 | 1.3 |
-| 0.20m | 27,891,234 | 44.2% | 35.12 | 1.4 |
-
-**关键指标**：
-- 平均吞吐量：**1.2M 点/秒**
-- 内存占用：~12 GB
-- CPU 使用率：~90%
-
-## 降采样策略对比
-
-测试配置：10M 点云，体素大小 0.15m
-
-| 策略 | 输出点数 | 耗时 (s) | 相对性能 |
-|------|---------|---------|---------|
-| RANDOM_SEEDED | 7,870,113 | 5.82 | ⭐⭐⭐⭐⭐ |
-| NEAREST_TO_CENTROID | 7,870,113 | 7.13 | ⭐⭐⭐⭐ |
-| AVERAGE | 7,870,113 | 8.45 | ⭐⭐⭐ |
-
-**结论**：
-- `RANDOM_SEEDED` 最快且可复现
-- `NEAREST_TO_CENTROID` 保留原始点
-- `AVERAGE` 提供平均体素语义
-
-## 文件 I/O 性能
-
-### LAZ 读取
-
-| 文件大小 | 点数 | 读取时间 | 速度 (MB/s) |
-|---------|------|---------|------------|
-| 100 MB | 5M | 2.3s | 43 |
-| 500 MB | 25M | 11.2s | 45 |
-| 1 GB | 50M | 22.8s | 44 |
-| 2 GB | 100M | 46.1s | 43 |
-
-### LAZ 写入
-
-| 点数 | 文件大小 | 写入时间 | 速度 (MB/s) |
-|------|---------|---------|------------|
-| 5M | 98 MB | 3.1s | 32 |
-| 25M | 487 MB | 15.7s | 31 |
-| 50M | 975 MB | 31.4s | 31 |
-| 100M | 1.95 GB | 63.2s | 32 |
-
-## 内存使用
-
-### 峰值内存占用
-
-| 点数 | 坐标 (XYZ) | +强度 | +RGB | +2维 | 总计 |
-|------|-----------|-------|------|------|------|
-| 1M | 12 MB | 16 MB | 28 MB | 36 MB | 36 MB |
-| 10M | 115 MB | 154 MB | 269 MB | 346 MB | 346 MB |
-| 50M | 572 MB | 763 MB | 1.3 GB | 1.7 GB | 1.7 GB |
-| 100M | 1.1 GB | 1.5 GB | 2.6 GB | 3.3 GB | 3.3 GB |
-
-**公式**：
-```
-内存 (MB) = N * (12 + 4*n_attrs) / 1e6
-```
-其中 N 是点数，n_attrs 是额外属性数量（intensity=1, RGB=3, dimension=1）
-
-## 多平台对比
-
-### 10M 点云体素下采样（0.15m）
-
-| 平台 | 耗时 (s) | 吞吐量 (M/s) | 相对性能 |
-|------|---------|-------------|---------|
-| macOS M1 | 7.13 | 1.40 | 100% (基准) |
-| Linux x64 | 8.45 | 1.18 | 84% |
-| Windows x64 | 9.21 | 1.09 | 78% |
-
-**分析**：
-- macOS M1 凭借统一内存架构表现最佳
-- Linux 性能稳定，适合服务器部署
-- Windows 略慢，可能受 MSVC 编译器影响
-
-## 扩展性测试
-
-### 点数扩展
-
-测试不同点云规模的处理时间：
-
-```
-点数 (M)     耗时 (s)     每点耗时 (μs)
-    1          0.71           0.71
-   10          7.13           0.71
-   50         37.45           0.75
-  100         76.82           0.77
+```bash
+just benchmark-smoke
+just benchmark-standard
+just benchmark-full
 ```
 
-**线性度**: R² = 0.999（接近完美线性）
+`just benchmark` remains a compatibility alias for `just benchmark-smoke`.
 
-### 体素大小影响
+| Mode | Purpose | Workload |
+|---|---|---|
+| `smoke` | Pull requests and ordinary CI | C20 with 20 clouds x 1M points, plus D20 scaled to 2M points across the full strategy/voxel schema. |
+| `standard` | Manual or scheduled runs on benchmark hardware | C20 full concat target plus D20, D50, and D100 full downsampling targets. |
+| `full` | Release and dedicated benchmark machines | Full concat and downsampling matrices. |
 
-体素大小越小，输出点数越多，但处理时间影响不大：
+The pytest option behind the recipes is:
 
-```
-体素 (m)    减少率    耗时变化
-  0.05      -5%        +8%
-  0.10      +0%         0%
-  0.15      +0%         0% (基准)
-  0.20      +5%        -10%
-```
-
-## 与其他库对比
-
-### Open3D 对比
-
-测试：10M 点云体素下采样
-
-| 库 | 耗时 (s) | 相对速度 |
-|----|---------|---------|
-| pcl-rustic | 7.13 | **3.2×** 更快 |
-| Open3D | 23.1 | 基准 |
-
-### Python-PCL 对比
-
-| 库 | 耗时 (s) | 相对速度 |
-|----|---------|---------|
-| pcl-rustic | 7.13 | **2.8×** 更快 |
-| python-pcl | 19.8 | 基准 |
-
-## 优化建议
-
-### 1. 选择合适的体素大小
-
-```python
-# ✅ 好：根据点云密度选择
-density = pc.point_count() / volume
-voxel_size = (1 / density) ** (1/3) * 10
-
-# ❌ 差：固定的小体素
-voxel_size = 0.01  # 可能导致输出点数过多
+```bash
+uv run pytest tests/test_benchmark.py -v -s --run-slow --benchmark-mode=smoke --no-cov
 ```
 
-### 2. 使用 float32
+`--benchmark-mode` accepts `smoke`, `standard`, or `full` and defaults to
+`smoke`. Benchmark tests are still marked `slow`, so normal test runs continue
+to skip them unless `--run-slow` or a benchmark recipe is used.
 
-```python
-# ✅ 好：使用 float32
-xyz = np.random.randn(1000000, 3).astype(np.float32)
+## Matrices
 
-# ❌ 差：使用 float64
-xyz = np.random.randn(1000000, 3)  # 默认 float64
+### Concatenation
+
+Full mode concatenates clouds with 10M points each:
+
+| Case | Clouds | Points per cloud | Total points | Operations |
+|---|---:|---:|---:|---|
+| C20 | 20 | 10M | 200M | concatenate; concatenate + voxelize |
+| C40 | 40 | 10M | 400M | concatenate; concatenate + voxelize |
+| C80 | 80 | 10M | 800M | concatenate; concatenate + voxelize |
+| C120 | 120 | 10M | 1.2B | concatenate; concatenate + voxelize |
+| C160 | 160 | 10M | 1.6B | concatenate; concatenate + voxelize |
+| C200 | 200 | 10M | 2.0B | concatenate; concatenate + voxelize |
+
+Standard mode runs the full C20 target. Smoke mode runs C20 with 1M points
+per input cloud.
+
+### Downsampling
+
+Full mode downsampling cases:
+
+| Case | Input points | Voxel sizes | Strategies |
+|---|---:|---|---|
+| D20 | 20M | 0.05, 0.15, 0.50 | `NEAREST_TO_CENTROID`, `AVERAGE`, `RANDOM_SEEDED` |
+| D50 | 50M | 0.05, 0.15, 0.50 | same |
+| D100 | 100M | 0.05, 0.15, 0.50 | same |
+| D200 | 200M | 0.05, 0.15, 0.50 | same |
+| D400 | 400M | 0.05, 0.15, 0.50 | same |
+
+Standard mode runs D20, D50, and D100 at full size. Smoke mode runs D20
+scaled to 2M points with the same voxel sizes and strategies.
+
+## CSV Output
+
+Each benchmark run writes a fresh CSV under `reports/benchmarks/`:
+
+```text
+reports/benchmarks/rfc0009-smoke.csv
+reports/benchmarks/rfc0009-standard.csv
+reports/benchmarks/rfc0009-full.csv
 ```
 
-### 3. 批量处理
+The CSV columns follow RFC-0009 section 3.3:
 
-```python
-# ✅ 好：一次性处理
-pc = PointCloud.from_xyz(xyz)
-pc.set_intensity(intensity)
-pc_down = pc.voxel_downsample(0.15)
+| Column | Meaning |
+|---|---|
+| `case_id` | Matrix case such as `C20` or `D100`. |
+| `operation` | `concatenate`, `concatenate_voxelize`, or `voxel_downsample`. |
+| `backend` | Benchmark harness backend label. |
+| `input_clouds` | Number of input clouds. |
+| `input_points` | Total input points. |
+| `output_points` | Output point count after the operation. |
+| `voxel_size` | Voxel size when applicable. |
+| `strategy` | Downsampling strategy when applicable. |
+| `wall_time_s` | Measured wall-clock time in seconds. |
+| `throughput_points_s` | Input points divided by wall time. |
+| `peak_rss_bytes` | Process peak RSS when the platform exposes it. |
+| `estimated_input_bytes` | Estimated bytes for `xyz` plus RFC attributes. |
+| `estimated_output_bytes` | Estimated bytes for output points with the same schema. |
+| `device_name` | Public `PointCloud.device()` value for the result. |
+| `git_sha` | Git commit SHA or `GITHUB_SHA`. |
 
-# ❌ 差：多次小规模处理
-for chunk in chunks:
-    pc = PointCloud.from_xyz(chunk)
-    # ...
-```
+Run `just benchmark-docs` after a recorded benchmark run to regenerate this
+page from CSV output.
 
-### 4. 及时释放内存
+## CI Behavior
 
-```python
-# ✅ 好：显式删除
-pc_down = pc.voxel_downsample(0.15)
-del pc  # 释放原始点云
+GitHub Actions runs `just benchmark-smoke` for pull requests and normal CI. A
+manual workflow dispatch can select `smoke`, `standard`, or `full` through the
+`benchmark_mode` input. Standard and full modes also require
+`allow_expensive_benchmarks=true` so they are not launched accidentally on
+hosted runners.
 
-# ❌ 差：同时保留多个副本
-pc1 = pc.voxel_downsample(0.10)
-pc2 = pc.voxel_downsample(0.15)
-pc3 = pc.voxel_downsample(0.20)
-```
+Standard and full modes are not intended for hosted pull-request runners. Use a
+dedicated machine or self-hosted runner with enough RAM, swap, disk space, and
+a known CPU/GPU configuration. Full C200 concatenation represents 2B input
+points before intermediate allocations, so memory requirements can reach
+hundreds of GB depending on allocator behavior and backend implementation.
 
-## 性能分析工具
+## Recorded Results
 
-### 使用 `loguru` 记录性能
-
-```python
-from loguru import logger
-import time
-
-logger.add("performance.log", rotation="100 MB")
-
-start = time.time()
-pc_down = pc.voxel_downsample(0.15)
-elapsed = time.time() - start
-
-logger.info(
-    f"Voxel downsample: {pc.point_count():,} → {pc_down.point_count():,} "
-    f"in {elapsed:.2f}s ({pc.point_count()/elapsed/1e6:.2f}M pts/s)"
-)
-```
-
-### 使用 `pytest-benchmark`
-
-```python
-def test_downsample_benchmark(benchmark):
-    xyz = np.random.randn(1000000, 3).astype(np.float32)
-    pc = PointCloud.from_xyz(xyz)
-
-    result = benchmark(pc.voxel_downsample, 0.15)
-    assert result.point_count() < pc.point_count()
-```
-
-## 持续监控
-
-CI 流水线中的性能基准测试会自动运行，结果可在 GitHub Actions Artifacts 中下载：
-
-- **频率**: 每次 release 标签
-- **平台**: macOS, Linux, Windows
-- **保留期**: 30 天
-
-查看最新结果：[GitHub Actions](https://github.com/ArkWhale/pcl-rustic/actions/workflows/benchmark.yml)
-
-## 下一步
-
-- [优化指南](optimization.md) - 深入的性能优化技巧
-- [API 文档](../api/downsample.md) - 下采样 API 详情
-- [开发指南](../development/setup.md) - 开发环境配置
+No recorded benchmark CSV files were found under `reports/benchmarks/`.
+Run one of the benchmark recipes, then run `just benchmark-docs` to refresh
+this section from measured output.

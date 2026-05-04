@@ -17,7 +17,7 @@ examples, and automation.
 | RFC-0006 Outlier Removal | Partial | SOR/ROR APIs and masks exist with basic tests/docs; acceptance coverage, same-device mask contract, LAS propagation tests, and 10M benchmark are missing. |
 | RFC-0007 ICP/GICP Registration | Partial | Registration API, point-to-point ICP, evaluate, covariance storage, and prerequisite validation exist; point-to-plane/GICP solvers are staged, not complete. |
 | RFC-0008 KD-tree Fallback & GICP Staging | Mostly implemented | Fallback behavior and staged GICP decision are implemented; full covariance-weighted GICP remains open by design. |
-| RFC-0009 Large-Scale Benchmark Suite | Mostly missing | Existing benchmark file covers older voxel/transform timings; RFC-0009 smoke/standard/full modes, concat matrix, CSV output, and typed benchmark schema are missing. |
+| RFC-0009 Large-Scale Benchmark Suite | Mostly implemented | Smoke/standard/full modes, concat/downsample matrices, typed attrs, CSV output, just recipes, CI smoke job, and docs regeneration support are implemented; standard/full benchmark runs remain unexecuted. |
 
 ## Implemented Evidence
 
@@ -122,10 +122,28 @@ examples, and automation.
 
 ### RFC-0009 - Large-Scale Benchmark Suite
 
-- `tests/test_benchmark.py` contains existing large Gaussian voxel and transform
-  benchmark tests.
-- `just benchmark` exists for the older benchmark report path.
-- Current benchmark data includes `xyz`, `intensity`, `d1`, and `d2`.
+- `tests/test_benchmark.py` implements RFC-0009 benchmark modes:
+  - smoke: C20 with 20 clouds x 1M points, plus D20 scaled to 2M points.
+  - standard: full C20 target plus D20/D50/D100 downsampling.
+  - full: C20-C200 concat matrix plus D20-D400 downsampling matrix.
+- Full concat matrix covers 20, 40, 80, 120, 160, and 200 clouds with 10M
+  points per cloud.
+- Full downsampling matrix covers 20M, 50M, 100M, 200M, and 400M points with
+  voxel sizes `0.05`, `0.15`, and `0.50` across `NEAREST_TO_CENTROID`,
+  `AVERAGE`, and `RANDOM_SEEDED`.
+- Synthetic benchmark data includes RFC-required typed attributes:
+  `intensity: float32`, `classification: uint8`, `return_number: uint8`, and
+  `gps_time: float64`.
+- Benchmark runs write fresh CSV output under `reports/benchmarks/` with the
+  RFC-0009 section 3.3 columns.
+- Added `just benchmark-smoke`, `just benchmark-standard`,
+  `just benchmark-full`, and `just benchmark-docs`; `just benchmark` remains a
+  smoke alias.
+- `.github/workflows/test.yml` runs `just benchmark-smoke` in CI and requires an
+  explicit `allow_expensive_benchmarks=true` input for standard/full manual
+  dispatches.
+- `tools/render_benchmark_docs.py` regenerates `docs/performance/benchmarks.md`
+  from recorded CSV output without fabricating performance numbers.
 
 ## Important Gaps By RFC
 
@@ -197,16 +215,10 @@ examples, and automation.
 
 ### RFC-0009
 
-- No `smoke`, `standard`, or `full` benchmark modes.
-- Missing `just benchmark-smoke`, `just benchmark-standard`, and
-  `just benchmark-full`.
-- No concat benchmark matrix for 20-200 clouds x 10M points.
-- Downsampling matrix does not match RFC-0009 sizes, voxel sizes, or strategies.
-- No CSV writer to `reports/benchmarks/`.
-- `docs/performance/benchmarks.md` appears static, not generated from benchmark
-  CSV output.
-- Benchmark generator lacks required typed attrs: `classification`,
-  `return_number`, and `gps_time`.
+- Standard and full benchmark modes have not been executed locally; they require
+  high-memory benchmark hardware.
+- The docs renderer exists, but release benchmark results still need to be
+  produced on recorded hardware before publishing measured performance rows.
 
 ## Verification Snapshot
 
@@ -217,8 +229,19 @@ Previous session evidence recorded:
 - `uv run pytest tests/test_point_cloud.py -v` passed: 40/40 Python integration
   tests.
 
-This review did not rerun the test suite. The subagent audits were read-only,
-and the local update only edited this memory document.
+The RFC-0009 implementation slice also ran focused verification:
+
+- `uv run ruff format tests/test_benchmark.py tests/conftest.py
+  tools/render_benchmark_docs.py`
+- `uv run ruff check tests/test_benchmark.py tests/conftest.py
+  tools/render_benchmark_docs.py`
+- `uv tool run --from rust-just just --summary`
+- `uv tool run --from rust-just just --dry-run benchmark-smoke`
+- `uv run pytest tests/test_benchmark.py --no-cov` confirmed benchmark tests
+  remain skipped without `--run-slow`.
+- A matrix sanity script confirmed RFC-0009 smoke, standard, and full case
+  definitions.
+- `tools/render_benchmark_docs.py` was exercised against an empty CSV directory.
 
 Note: a prior local shell did not have `just` installed, so `just test` /
 `just ci` could not be invoked directly in that session. Equivalent steps were
@@ -230,14 +253,14 @@ run manually then. CI installs `just` before invoking `just ci`.
    benchmark matrix.
 2. Replace staged point-to-plane/GICP updates with their actual solvers and add
    the required comparison/scale tests.
-3. Implement RFC-0009 benchmark modes, concat matrix, CSV output, and generated
-   docs.
-4. Close strict RFC-0003 gaps: `select_where`, `crop_obb`, `obb()`, LAS fixture
+3. Close strict RFC-0003 gaps: `select_where`, `crop_obb`, `obb()`, LAS fixture
    tests, and stronger concat coverage.
-5. Decide whether RFC-0002 should remain host-typed attributes by design or move
+4. Decide whether RFC-0002 should remain host-typed attributes by design or move
    to literal tensor-backed typed attributes and zero-copy getters.
-6. Strengthen RFC-0005/RFC-0006 acceptance tests and publish the required
+5. Strengthen RFC-0005/RFC-0006 acceptance tests and publish the required
    benchmark results.
+6. Run RFC-0009 standard/full benchmarks on recorded high-memory hardware and
+   regenerate benchmark docs from the resulting CSV files.
 
 ## Architecture Decisions Recorded
 

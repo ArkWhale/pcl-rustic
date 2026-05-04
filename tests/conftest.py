@@ -27,7 +27,9 @@ logger.add(
 def pytest_configure(config):
     """注册自定义标记"""
     config.addinivalue_line("markers", "slow: 标记为慢速测试（100M+ 点）")
+    config.addinivalue_line("markers", "benchmark: RFC-0009 benchmark suite tests")
     Path("reports").mkdir(parents=True, exist_ok=True)
+    Path("reports/benchmarks").mkdir(parents=True, exist_ok=True)
 
 
 def pytest_addoption(parser):
@@ -37,6 +39,13 @@ def pytest_addoption(parser):
         action="store_true",
         default=False,
         help="运行慢速测试（100M+ 点云）",
+    )
+    parser.addoption(
+        "--benchmark-mode",
+        action="store",
+        default="smoke",
+        choices=("smoke", "standard", "full"),
+        help="Benchmark suite scope: smoke, standard, or full (default: smoke)",
     )
 
 

@@ -23,8 +23,19 @@ test-slow:
     uv run pytest tests/ -v --run-slow
 
 # Run benchmark tests
-benchmark:
-    uv run pytest tests/test_benchmark.py::TestBenchmarkSummary::test_full_benchmark_report -v -s
+benchmark: benchmark-smoke
+
+benchmark-smoke: build
+    uv run pytest tests/test_benchmark.py -v -s --run-slow --benchmark-mode=smoke --no-cov
+
+benchmark-standard: build
+    uv run pytest tests/test_benchmark.py -v -s --run-slow --benchmark-mode=standard --no-cov
+
+benchmark-full: build
+    uv run pytest tests/test_benchmark.py -v -s --run-slow --benchmark-mode=full --no-cov
+
+benchmark-docs:
+    uv run python tools/render_benchmark_docs.py
 
 # Run Rust tests
 test-rust:
