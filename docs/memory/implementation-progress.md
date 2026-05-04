@@ -14,7 +14,7 @@ examples, and automation.
 | RFC-0003 Coordinate Ops & Selection | Partial | Selection, generic attribute filters, AABB/OBB crop, concat, transform wrappers, and examples exist; LAS-fixture coverage and device-native selection are still missing. |
 | RFC-0004 GPU Hot Path | Mostly missing | Device transfer hooks exist, but voxel downsample, selection, concat, and benchmarks remain CPU/reference paths. |
 | RFC-0005 KD-tree, Octree, Normals | Partial | KD-tree, fallback, octree, Python APIs, normals, and covariance support exist; acceptance-level benchmarks, cache tests, and stronger oracle tests are missing. |
-| RFC-0006 Outlier Removal | Partial | SOR/ROR APIs and masks exist with basic tests/docs; acceptance coverage, same-device mask contract, LAS propagation tests, and 10M benchmark are missing. |
+| RFC-0006 Outlier Removal | Partial | SOR/ROR APIs, masks, docs, synthetic acceptance tests, and typed attribute propagation coverage exist; same-device mask contract, LAS propagation tests, and 10M benchmark are missing. |
 | RFC-0007 ICP/GICP Registration | Partial | Registration API, point-to-point ICP, evaluate, covariance storage, and prerequisite validation exist; point-to-plane/GICP solvers are staged, not complete. |
 | RFC-0008 KD-tree Fallback & GICP Staging | Mostly implemented | Fallback behavior and staged GICP decision are implemented; full covariance-weighted GICP remains open by design. |
 | RFC-0009 Large-Scale Benchmark Suite | Mostly implemented | Smoke/standard/full modes, concat/downsample matrices, typed attrs, CSV output, just recipes, CI smoke job, and docs regeneration support are implemented; standard/full benchmark runs remain unexecuted. |
@@ -92,9 +92,11 @@ examples, and automation.
   - `remove_radius_outlier(nb_points, radius) -> (cloud, kept_mask)`
 - Python bindings return NumPy boolean masks.
 - Attribute propagation is supported through `AttributeValue::select_mask`.
+- Tests cover empty-input errors, injected isolated SOR outliers, mask sum
+  consistency, and typed attribute propagation through ROR.
 - `docs/api/outlier.md` exists.
-- `examples/classification_aware_downsample.py` includes ROR as an optional
-  cleaning step.
+- `examples/classification_aware_downsample.py` includes SOR and ROR as optional
+  cleaning steps.
 
 ### RFC-0007 - ICP/GICP Registration
 
@@ -190,12 +192,8 @@ examples, and automation.
 ### RFC-0006
 
 - Rust returns `Vec<bool>` masks, not same-device `Tensor1<Backend, bool>`.
-- Tests are lighter than acceptance criteria: no Gaussian injected-outlier test,
-  empty-input test, `kept_mask.sum() == pc_clean.point_count()` assertion, or
-  LAS round-trip propagation test.
+- LAS round-trip propagation test is still missing.
 - No SOR 10M benchmark evidence.
-- Docs do not yet include detailed `std_ratio=2.0` vs `3.0` tuning guidance.
-- Classification-aware example includes ROR only, not both SOR and ROR.
 
 ### RFC-0007
 
@@ -248,6 +246,11 @@ The RFC-0009 implementation slice also ran focused verification:
   - `uv run ruff format tests/test_point_cloud.py`
   - `cargo test selection --lib`
   - `uv run pytest tests/test_point_cloud.py::TestSelectionAndConcatenation::test_feature_and_spatial_selection -v --no-cov`
+- RFC-0006 outlier focused checks:
+  - `uv run ruff format tests/test_point_cloud.py
+    examples/classification_aware_downsample.py`
+  - `uv run pytest tests/test_point_cloud.py::TestNeighborsNormalsOutliersRegistration::test_outlier_empty_input_errors tests/test_point_cloud.py::TestNeighborsNormalsOutliersRegistration::test_statistical_outlier_removes_injected_outliers tests/test_point_cloud.py::TestNeighborsNormalsOutliersRegistration::test_outlier_preserves_typed_attributes -v --no-cov`
+  - `uv run python examples/classification_aware_downsample.py`
 
 Note: a prior local shell did not have `just` installed, so `just test` /
 `just ci` could not be invoked directly in that session. Equivalent steps were

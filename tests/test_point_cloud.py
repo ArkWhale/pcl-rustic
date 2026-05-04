@@ -409,6 +409,56 @@ class TestNeighborsNormalsOutliersRegistration:
         assert filtered.point_count() < pc.point_count()
         assert mask.dtype == np.bool_
 
+    def test_outlier_empty_input_errors(self):
+        pc = PointCloud()
+        with pytest.raises(ValueError):
+            pc.remove_radius_outlier(nb_points=1, radius=1.0)
+        with pytest.raises(ValueError):
+            pc.remove_statistical_outlier(nb_neighbors=2, std_ratio=1.0)
+
+    def test_statistical_outlier_removes_injected_outliers(self):
+        rng = np.random.default_rng(42)
+        cluster = rng.normal(0.0, 0.05, size=(300, 3)).astype(np.float32)
+        outliers = np.column_stack(
+            [
+                np.linspace(10.0, 200.0, 20, dtype=np.float32),
+                np.zeros(20, dtype=np.float32),
+                np.zeros(20, dtype=np.float32),
+            ]
+        )
+        xyz = np.vstack([cluster, outliers])
+        pc = PointCloud.from_xyz(xyz)
+
+        filtered, mask = pc.remove_statistical_outlier(nb_neighbors=8, std_ratio=1.0)
+
+        assert mask.sum() == filtered.point_count()
+        removed_outliers = (~mask[-len(outliers) :]).sum()
+        assert removed_outliers >= int(len(outliers) * 0.95)
+
+    def test_outlier_preserves_typed_attributes(self):
+        xyz = np.array(
+            [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.2, 0.0, 0.0], [5.0, 5.0, 5.0]],
+            dtype=np.float32,
+        )
+        pc = PointCloud.from_xyz(xyz)
+        intensity = np.array([1.0, 2.0, 3.0, 99.0], dtype=np.float32)
+        classification = np.array([2, 2, 6, 7], dtype=np.uint8)
+        gps_time = np.array([10.0, 11.0, 12.0, 13.0], dtype=np.float64)
+        pc.set_intensity(intensity)
+        pc.set_attribute("classification", classification)
+        pc.set_attribute("gps_time", gps_time)
+
+        filtered, mask = pc.remove_radius_outlier(nb_points=1, radius=0.15)
+
+        assert mask.sum() == filtered.point_count()
+        np.testing.assert_array_equal(filtered.get_intensity(), intensity[mask])
+        np.testing.assert_array_equal(
+            filtered.get_attribute("classification"), classification[mask]
+        )
+        np.testing.assert_array_equal(
+            filtered.get_attribute("gps_time"), gps_time[mask]
+        )
+
     def test_registration_api(self):
         xyz = np.array(
             [[i * 0.37, np.sin(i * 1.91), np.cos(i * 0.73)] for i in range(40)],

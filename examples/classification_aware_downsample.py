@@ -22,10 +22,10 @@ def build_fixture() -> PointCloud:
 def main() -> None:
     pc = build_fixture()
     class_voxels = {
-        2: 0.5,   # ground
+        2: 0.5,  # ground
         3: 0.25,  # low vegetation
-        5: 0.2,   # high vegetation
-        6: 0.1,   # buildings
+        5: 0.2,  # high vegetation
+        6: 0.1,  # buildings
     }
 
     parts = []
@@ -33,7 +33,10 @@ def main() -> None:
         subset = pc.select_by_classification([code])
         if subset.point_count() == 0:
             continue
-        clean, _ = subset.remove_radius_outlier(nb_points=2, radius=max(voxel_size * 2, 0.2))
+        clean, _ = subset.remove_statistical_outlier(nb_neighbors=8, std_ratio=2.5)
+        clean, _ = clean.remove_radius_outlier(
+            nb_points=1, radius=max(voxel_size * 4, 0.5)
+        )
         if clean.point_count() == 0:
             continue
         parts.append(clean.voxel_downsample(voxel_size, DownsampleStrategy.AVERAGE))
@@ -44,4 +47,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
