@@ -282,6 +282,25 @@ class TestSelectionAndConcatenation:
         union = PointCloud.concatenate([pc1, pc3], "union")
         np.testing.assert_array_equal(union.get_attribute("classification"), [1, 2, 0])
 
+        intersection = PointCloud.concatenate([pc1, pc3], "intersection")
+        assert intersection.point_count() == 3
+        assert "classification" not in intersection.attribute_names()
+
+    def test_concatenate_edge_cases(self):
+        pc = PointCloud.from_xyz(np.arange(6, dtype=np.float32).reshape(2, 3))
+        pc.set_attribute("classification", np.array([1, 2], dtype=np.uint8))
+
+        single = PointCloud.concatenate([pc], "strict")
+        assert single.point_count() == pc.point_count()
+        np.testing.assert_array_equal(
+            single.get_attribute("classification"), pc.get_attribute("classification")
+        )
+
+        other = PointCloud.from_xyz(np.ones((1, 3), dtype=np.float32))
+        other.set_attribute("classification", np.array([1.0], dtype=np.float32))
+        with pytest.raises(ValueError):
+            PointCloud.concatenate([pc, other], "strict")
+
 
 class TestVoxelDownsample:
     """体素下采样测试"""

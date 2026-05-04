@@ -53,6 +53,8 @@ examples, and automation.
   - `PointCloud.concatenate(clouds, policy)`
   - `translate`, `scale`, `rotate`, `rigid_transform`, `transform`
 - `PointCloud.concatenate` supports `strict`, `union`, and `intersection`.
+- Tests cover single-cloud concat, intersection policy, missing-attribute strict
+  rejection, and dtype-mismatch strict rejection.
 - Added examples:
   - `examples/split_grid_downsample_concat.py`
   - `examples/classification_aware_downsample.py`
@@ -168,8 +170,9 @@ examples, and automation.
 - Selection and concat are host-vector implementations, not device-resident
   tensor gather/cat operations.
 - Tests are synthetic; no `tests/data` LAS fixture was found.
-- Missing or incomplete acceptance tests for empty input, single-cloud concat,
-  intersection policy, and LAS classification round-trip.
+- Empty concat/select still needs a backend-safe zero-point path; current WGPU
+  backend can panic on zero-size resources.
+- LAS classification round-trip coverage is still missing.
 
 ### RFC-0004
 
@@ -255,6 +258,9 @@ The RFC-0009 implementation slice also ran focused verification:
 - RFC-0008 fallback focused checks:
   - `cargo fmt`
   - `cargo test degenerate_axis_uses_deterministic_fallback --lib`
+- RFC-0003 concat focused checks:
+  - `uv run ruff format tests/test_point_cloud.py`
+  - `uv run pytest tests/test_point_cloud.py::TestSelectionAndConcatenation::test_concatenate_policies tests/test_point_cloud.py::TestSelectionAndConcatenation::test_concatenate_edge_cases -v --no-cov`
 
 Note: a prior local shell did not have `just` installed, so `just test` /
 `just ci` could not be invoked directly in that session. Equivalent steps were
@@ -266,9 +272,9 @@ run manually then. CI installs `just` before invoking `just ci`.
    benchmark matrix.
 2. Replace staged point-to-plane/GICP updates with their actual solvers and add
    the required comparison/scale tests.
-3. Close remaining strict RFC-0003 gaps: LAS fixture tests, empty input,
-   single-cloud concat, intersection policy, LAS classification round-trip, and
-   device-native selection.
+3. Close remaining strict RFC-0003 gaps: LAS fixture tests, empty input /
+   zero-point backend handling, LAS classification round-trip, and device-native
+   selection.
 4. Decide whether RFC-0002 should remain host-typed attributes by design or move
    to literal tensor-backed typed attributes and zero-copy getters.
 5. Strengthen RFC-0005/RFC-0006 acceptance tests and publish the required
