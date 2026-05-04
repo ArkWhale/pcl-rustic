@@ -144,7 +144,7 @@ pc.to_parquet("output.parquet", x="x", y="y", z="z")
 
 ## 属性处理
 
-### 添加自定义属性后保存
+### 保存标准属性
 
 ```python
 from pcl_rustic import PointCloud
@@ -158,13 +158,13 @@ pc = PointCloud.from_xyz(xyz)
 intensity = np.random.randint(0, 65535, 1000, dtype=np.uint16)
 pc.set_intensity(intensity.astype(np.float32) / 65535)
 
-# 添加自定义属性
-custom_attr = np.random.randn(1000).astype(np.float32)
-pc.add_attribute("custom", custom_attr)
-
-# 保存到 Parquet（保留所有属性）
+# 保存到 Parquet（写出 XYZ、intensity 和 RGB 标准属性）
 pc.to_parquet("output.parquet", x="x", y="y", z="z", intensity="intensity")
 ```
+
+CSV/Parquet helpers currently write XYZ plus the standard `intensity` and RGB
+attributes. Full custom-attribute table export is tracked separately from the
+RFC-0002 typed-attribute storage work.
 
 ## 相关链接
 

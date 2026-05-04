@@ -232,6 +232,9 @@ fn get_u8_col(df: &DataFrame, name: &str) -> Result<Vec<u8>> {
     if let Ok(col) = series.u16() {
         return Ok(col.into_no_null_iter().map(|v| (v >> 8) as u8).collect());
     }
+    if let Ok(col) = series.u32() {
+        return Ok(col.into_no_null_iter().map(|v| v.min(255) as u8).collect());
+    }
     if let Ok(col) = series.i64() {
         return Ok(col
             .into_no_null_iter()

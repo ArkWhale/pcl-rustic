@@ -11,7 +11,7 @@ voxel and emits one point per occupied voxel.
 | `DownsampleStrategy.NEAREST_TO_CENTROID` | Picks the existing point nearest to the voxel centroid. |
 | `DownsampleStrategy.AVERAGE` | Emits a synthetic averaged point. Float attributes are averaged, integer attributes use mode, and bool attributes use majority vote. |
 
-`RANDOM` and `CENTROID` remain aliases for the transition period.
+The legacy `RANDOM` and `CENTROID` aliases were removed during the RFC-0002 API reset.
 
 ## Example
 
@@ -40,4 +40,3 @@ averaged = pc.voxel_downsample(
 
 `voxel_size` uses the coordinate unit of the input cloud. For LAS data that is
 normally meters.
-

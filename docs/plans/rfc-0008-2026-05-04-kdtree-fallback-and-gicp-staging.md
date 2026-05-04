@@ -1,6 +1,6 @@
 # RFC-0008: KD-tree Fallback & GICP Staging
 
-- **Status:** Proposed
+- **Status:** Implemented (staged GICP follow-up open)
 - **Date:** 2026-05-04
 - **Author:** Codex implementation agent
 - **Related:** RFC-0005, RFC-0007

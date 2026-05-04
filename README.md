@@ -11,7 +11,7 @@
 ## ✨ 核心特性
 
 - 🚀 **高性能批量运算**：基于 Burn 张量框架，支持 CPU/GPU 加速
-- 🔗 **零拷贝互通**：与 NumPy 数组无缝转换，支持多种 dtype
+- 🔗 **NumPy 互通**：与 NumPy 数组无缝转换，支持多种 dtype
 - 📦 **多格式 I/O**：LAZ/LAS/Parquet/CSV 格式读写
 - 🎯 **类型安全**：完整的类型注解和 `.pyi` 存根文件
 - 🧩 **模块化设计**：typed attributes、选择、邻域、异常点过滤和配准分层实现
@@ -165,7 +165,7 @@ src/
 ```
 
 **设计原则**：
-- ✅ 使用 NumPy 数组作为 Python 接口（零拷贝读取）
+- ✅ 使用 NumPy 数组作为 Python 接口，保留 typed attributes 的 dtype
 - ✅ XYZ 存储为 `float32`，属性保留原始 dtype
 - ✅ Getter 方法返回 NumPy 数组，需要 `Python` GIL 上下文
 - ✅ 所有数据批量操作，不支持单点访问
@@ -522,11 +522,11 @@ pc = PointCloud.from_xyz(xyz)
 
 ### 类型错误
 
-**问题**：`TypeError: xyz必须是dtype=float32的2D numpy数组`
+**问题**：`TypeError: xyz must be a 2D numpy array with dtype float32, float64, int32, or int64`
 
 **解决**：
 ```python
-xyz = xyz.astype(np.float32)
+xyz = np.asarray(xyz, dtype=np.float32)
 ```
 
 ### 编译错误
@@ -555,15 +555,11 @@ maturin develop --release
 
 ## 📈 路线图
 
-- [ ] GPU 加速支持
-- [ ] 更多下采样策略（FPS, Normal-based）
-- [ ] 点云配准算法（ICP, NDT）
-- [ ] 法向量估计
-- [ ] 点云分割
-- [ ] Parquet 格式支持
+项目路线图由 [RFC-0001](docs/plans/rfc-0001-2026-04-30-pcl-rustic-roadmap.md) 跟踪；
+各 RFC 的当前状态见 [RFC 索引](docs/plans/README.md)。
 
 ---
 
 **Star ⭐ 本项目以支持开发！**
 
-最后更新：2026年1月31日
+最后更新：2026年5月4日

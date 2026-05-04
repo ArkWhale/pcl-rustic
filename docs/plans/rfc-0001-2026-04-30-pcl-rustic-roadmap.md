@@ -1,6 +1,6 @@
 # RFC-0001: pcl-rustic Roadmap & Open3D Replacement Vision
 
-- **Status:** Proposed
+- **Status:** Active roadmap
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36

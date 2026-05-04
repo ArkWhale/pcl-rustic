@@ -1,6 +1,6 @@
 # RFC-0005: Neighborhood Infra — KD-tree, Octree & Normal Estimation (M4)
 
-- **Status:** Proposed
+- **Status:** Partial
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD

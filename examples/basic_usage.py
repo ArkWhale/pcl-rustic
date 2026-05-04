@@ -7,6 +7,8 @@ PCL Rustic 使用示例
 
 import math
 
+import numpy as np
+
 from pcl_rustic import DownsampleStrategy, PointCloud
 
 
@@ -21,7 +23,7 @@ def example_basic_operations():
         [0.0, 1.0, 0.0],
         [0.0, 0.0, 1.0],
     ]
-    pc = PointCloud.from_xyz(xyz)
+    pc = PointCloud.from_xyz(np.asarray(xyz, dtype=np.float32))
     print(f"创建点云：{pc}")
     print(f"点数：{pc.point_count()}")
     print(f"XYZ坐标：{pc.get_xyz()}")
@@ -32,10 +34,10 @@ def example_properties():
     print("\n=== 属性操作 ===")
 
     xyz = [[i, i, i] for i in range(5)]
-    pc = PointCloud.from_xyz(xyz)
+    pc = PointCloud.from_xyz(np.asarray(xyz, dtype=np.float32))
 
     # 设置intensity
-    intensity = [100.0, 110.0, 120.0, 130.0, 140.0]
+    intensity = np.asarray([100.0, 110.0, 120.0, 130.0, 140.0], dtype=np.float32)
     pc.set_intensity(intensity)
     print(f"设置intensity：{pc.get_intensity()}")
 
@@ -47,12 +49,15 @@ def example_properties():
         [255, 255, 0],  # 黄
         [255, 0, 255],  # 紫
     ]
-    pc.set_rgb(rgb)
+    rgb = np.asarray(rgb, dtype=np.uint8)
+    pc.set_rgb(rgb[:, 0], rgb[:, 1], rgb[:, 2])
     print(f"设置RGB：{pc.get_rgb()}")
 
     # 添加自定义属性
-    pc.add_attribute("confidence", [0.9, 0.8, 0.7, 0.6, 0.5])
-    pc.add_attribute("category", [1.0, 1.0, 2.0, 2.0, 3.0])
+    pc.add_attribute(
+        "confidence", np.asarray([0.9, 0.8, 0.7, 0.6, 0.5], dtype=np.float32)
+    )
+    pc.add_attribute("category", np.asarray([1, 1, 2, 2, 3], dtype=np.uint8))
     print(f"属性列表：{pc.attribute_names()}")
     print(f"confidence：{pc.get_attribute('confidence')}")
 
@@ -63,7 +68,7 @@ def example_transform():
 
     # 创建简单点云
     xyz = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
-    pc = PointCloud.from_xyz(xyz)
+    pc = PointCloud.from_xyz(np.asarray(xyz, dtype=np.float32))
 
     # 示例1：缩放变换
     print("\n缩放变换（2倍）：")
@@ -119,15 +124,15 @@ def example_downsample():
         [2.1, 2.1, 2.1],
         [2.2, 2.1, 2.1],
     ]
-    pc = PointCloud.from_xyz(xyz)
+    pc = PointCloud.from_xyz(np.asarray(xyz, dtype=np.float32))
     print(f"原始点数：{pc.point_count()}")
 
     # 随机采样
-    pc_random = pc.voxel_downsample(1.0, DownsampleStrategy.RANDOM)
+    pc_random = pc.voxel_downsample(1.0, DownsampleStrategy.RANDOM_SEEDED, seed=42)
     print(f"随机采样后：{pc_random.point_count()}个点")
 
     # 重心采样
-    pc_centroid = pc.voxel_downsample(1.0, DownsampleStrategy.CENTROID)
+    pc_centroid = pc.voxel_downsample(1.0, DownsampleStrategy.NEAREST_TO_CENTROID)
     print(f"重心采样后：{pc_centroid.point_count()}个点")
 
 
@@ -137,13 +142,15 @@ def example_complete_workflow():
 
     # 1. 创建点云
     xyz = [[i * 0.1, i * 0.1, i * 0.1] for i in range(100)]
-    pc = PointCloud.from_xyz(xyz)
+    pc = PointCloud.from_xyz(np.asarray(xyz, dtype=np.float32))
     print(f"1. 创建点云：{pc.point_count()}个点")
 
     # 2. 添加属性
-    intensity = [i * 1.0 for i in range(100)]
+    intensity = np.asarray([i * 1.0 for i in range(100)], dtype=np.float32)
     pc.set_intensity(intensity)
-    pc.add_attribute("height", [h * 0.5 for h in range(100)])
+    pc.add_attribute(
+        "height", np.asarray([h * 0.5 for h in range(100)], dtype=np.float32)
+    )
     print("2. 添加属性：intensity, height")
 
     # 3. 应用变换
@@ -156,7 +163,7 @@ def example_complete_workflow():
     print("3. 应用变换")
 
     # 4. 下采样
-    pc_downsampled = pc.voxel_downsample(0.5, DownsampleStrategy.CENTROID)
+    pc_downsampled = pc.voxel_downsample(0.5, DownsampleStrategy.NEAREST_TO_CENTROID)
     print(f"4. 下采样：{pc.point_count()}个点 -> {pc_downsampled.point_count()}个点")
 
     # 5. 查看结果
@@ -171,10 +178,14 @@ def example_parquet_io():
     """Parquet 读写示例"""
     print("\n=== Parquet IO ===")
 
-    xyz = [[i * 0.1, i * 0.2, i * 0.3] for i in range(10)]
+    xyz = np.asarray([[i * 0.1, i * 0.2, i * 0.3] for i in range(10)], dtype=np.float32)
     pc = PointCloud.from_xyz(xyz)
-    pc.set_intensity([float(i) for i in range(10)])
-    pc.set_rgb([[i * 10 % 256, i * 20 % 256, i * 30 % 256] for i in range(10)])
+    pc.set_intensity(np.asarray([float(i) for i in range(10)], dtype=np.float32))
+    rgb = np.asarray(
+        [[i * 10 % 256, i * 20 % 256, i * 30 % 256] for i in range(10)],
+        dtype=np.uint8,
+    )
+    pc.set_rgb(rgb[:, 0], rgb[:, 1], rgb[:, 2])
 
     path = "./tmp_points.parquet"
     pc.to_parquet(path)
@@ -189,20 +200,27 @@ def example_memory_efficiency():
     print("\n=== 内存效率 ===")
 
     # 只有XYZ
-    pc1 = PointCloud.from_xyz([[i, i, i] for i in range(1000)])
+    pc1 = PointCloud.from_xyz(
+        np.asarray([[i, i, i] for i in range(1000)], dtype=np.float32)
+    )
     mem1 = pc1.memory_usage()
     print(f"只有XYZ：{mem1} 字节")
 
     # XYZ + intensity
-    pc2 = PointCloud.from_xyz([[i, i, i] for i in range(1000)])
-    pc2.set_intensity([float(i) for i in range(1000)])
+    pc2 = PointCloud.from_xyz(
+        np.asarray([[i, i, i] for i in range(1000)], dtype=np.float32)
+    )
+    pc2.set_intensity(np.asarray([float(i) for i in range(1000)], dtype=np.float32))
     mem2 = pc2.memory_usage()
     print(f"XYZ + intensity：{mem2} 字节（增加{mem2 - mem1}字节）")
 
     # XYZ + intensity + RGB
-    pc3 = PointCloud.from_xyz([[i, i, i] for i in range(1000)])
-    pc3.set_intensity([float(i) for i in range(1000)])
-    pc3.set_rgb([[i % 256, i % 256, i % 256] for i in range(1000)])
+    pc3 = PointCloud.from_xyz(
+        np.asarray([[i, i, i] for i in range(1000)], dtype=np.float32)
+    )
+    pc3.set_intensity(np.asarray([float(i) for i in range(1000)], dtype=np.float32))
+    rgb = np.asarray([[i % 256, i % 256, i % 256] for i in range(1000)], dtype=np.uint8)
+    pc3.set_rgb(rgb[:, 0], rgb[:, 1], rgb[:, 2])
     mem3 = pc3.memory_usage()
     print(f"XYZ + intensity + RGB：{mem3} 字节（增加{mem3 - mem2}字节）")
 

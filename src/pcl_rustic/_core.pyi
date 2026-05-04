@@ -22,6 +22,40 @@ class PointCloud:
     @staticmethod
     def from_las(path: str) -> "PointCloud": ...
     @staticmethod
+    def from_csv(
+        path: str,
+        delimiter: int = ord(","),
+        x: Optional[str] = None,
+        y: Optional[str] = None,
+        z: Optional[str] = None,
+        intensity: Optional[str] = None,
+        rgb_r: Optional[str] = None,
+        rgb_g: Optional[str] = None,
+        rgb_b: Optional[str] = None,
+    ) -> "PointCloud": ...
+    @staticmethod
+    def from_parquet(
+        path: str,
+        x: Optional[str] = None,
+        y: Optional[str] = None,
+        z: Optional[str] = None,
+        intensity: Optional[str] = None,
+        rgb_r: Optional[str] = None,
+        rgb_g: Optional[str] = None,
+        rgb_b: Optional[str] = None,
+    ) -> "PointCloud": ...
+    @staticmethod
+    def load_from_file(
+        path: str,
+        x: Optional[str] = None,
+        y: Optional[str] = None,
+        z: Optional[str] = None,
+        intensity: Optional[str] = None,
+        rgb_r: Optional[str] = None,
+        rgb_g: Optional[str] = None,
+        rgb_b: Optional[str] = None,
+    ) -> "PointCloud": ...
+    @staticmethod
     def concatenate(clouds: List["PointCloud"], policy: str = "strict") -> "PointCloud": ...
     @staticmethod
     def delete_file(path: str) -> None: ...
@@ -88,6 +122,40 @@ class PointCloud:
     def to(self, device: str) -> "PointCloud": ...
     def device(self) -> str: ...
     def to_las(self, path: str, compress: bool = False) -> None: ...
+    def to_csv(
+        self,
+        path: str,
+        delimiter: int = ord(","),
+        x: Optional[str] = None,
+        y: Optional[str] = None,
+        z: Optional[str] = None,
+        intensity: Optional[str] = None,
+        rgb_r: Optional[str] = None,
+        rgb_g: Optional[str] = None,
+        rgb_b: Optional[str] = None,
+    ) -> None: ...
+    def to_parquet(
+        self,
+        path: str,
+        x: Optional[str] = None,
+        y: Optional[str] = None,
+        z: Optional[str] = None,
+        intensity: Optional[str] = None,
+        rgb_r: Optional[str] = None,
+        rgb_g: Optional[str] = None,
+        rgb_b: Optional[str] = None,
+    ) -> None: ...
+    def save_to_file(
+        self,
+        path: str,
+        x: Optional[str] = None,
+        y: Optional[str] = None,
+        z: Optional[str] = None,
+        intensity: Optional[str] = None,
+        rgb_r: Optional[str] = None,
+        rgb_g: Optional[str] = None,
+        rgb_b: Optional[str] = None,
+    ) -> None: ...
     def memory_usage(self) -> int: ...
     def __repr__(self) -> str: ...
 
@@ -95,8 +163,6 @@ class DownsampleStrategy:
     RANDOM_SEEDED: int
     NEAREST_TO_CENTROID: int
     AVERAGE: int
-    RANDOM: int
-    CENTROID: int
 
 class NormalSearch:
     @staticmethod

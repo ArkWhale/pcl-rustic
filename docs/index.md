@@ -14,11 +14,11 @@
 
     基于 Burn 张量框架，支持 CPU/GPU 加速，10M 点云体素下采样仅需 ~7 秒
 
--   :material-link-variant:{ .lg .middle } __零拷贝互通__
+-   :material-link-variant:{ .lg .middle } __NumPy 互通__
 
     ---
 
-    与 NumPy 数组无缝转换，支持多种 dtype，最小化数据拷贝
+    与 NumPy 数组无缝转换，支持多种 dtype，保留 typed attributes
 
 -   :material-file-multiple:{ .lg .middle } __多格式 I/O__
 

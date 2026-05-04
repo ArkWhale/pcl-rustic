@@ -1,6 +1,6 @@
 # RFC-0006: Outlier Removal — SOR & ROR (M5)
 
-- **Status:** Proposed
+- **Status:** Partial
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
@@ -79,16 +79,16 @@ Open3D ships no defaults (all args required). We match that — no silent defaul
 
 ## 4. Acceptance criteria
 
-- [ ] Both methods implemented with the signatures in §3.1 / §3.2.
-- [ ] Unit tests:
+- [x] Both methods implemented with the Python signatures in §3.3. Rust currently returns a host `Vec<bool>` mask instead of same-device `Tensor1<Backend, bool>`.
+- [x] Unit tests:
   - SOR on a synthetic cloud = Gaussian blob + injected outliers; assert ≥ 95% of injected outliers removed at `std_ratio=2.0`.
   - ROR on a 1D line of points with one isolated extra point; assert the extra is removed at `nb_points=2, radius=step_size*1.5`.
   - Empty input → error, not panic.
   - `kept_mask.sum() == pc_clean.point_count()`.
 - [ ] Benchmark: SOR on a 10M-point cloud with `nb_neighbors=20` completes in < 30 s on the reference machine (dominated by kNN queries).
-- [ ] Attribute propagation: intensity, RGB, classification, custom attributes all survive correctly (tested via a LAS round-trip + outlier step + comparison).
-- [ ] Documentation page `docs/api/outlier.md` ships with worked examples and parameter-tuning guidance (what `std_ratio=2.0` vs `3.0` does).
-- [ ] Both functions included in the classification-aware pipeline example from RFC-0003 as an optional cleaning step.
+- [ ] Attribute propagation: intensity, RGB, classification, custom attributes all survive correctly (tested via a LAS round-trip + outlier step + comparison). Synthetic typed-attribute propagation coverage exists; LAS round-trip coverage remains open.
+- [x] Documentation page `docs/api/outlier.md` ships with worked examples and parameter-tuning guidance (what `std_ratio=2.0` vs `3.0` does).
+- [x] Both functions included in the classification-aware pipeline example from RFC-0003 as an optional cleaning step.
 
 ## 5. Risks & mitigations
 

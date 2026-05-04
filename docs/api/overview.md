@@ -40,7 +40,7 @@ pcl-rustic 提供以下主要模块和类：
 **主要功能**：
 - LAZ/LAS 文件读写
 - CSV 文件读写
-- Parquet 文件读写（规划中）
+- Parquet 文件读写
 
 ### 配准与清洗
 
@@ -100,7 +100,7 @@ pc_translated.to_las("output.laz", compress=True)
 本 API 遵循以下设计原则：
 
 1. **类型安全**：使用 `.pyi` 存根文件提供完整的类型注解
-2. **零拷贝**：NumPy 数组与 Rust 张量之间尽可能避免数据拷贝
+2. **NumPy 互通**：Python 接口使用 NumPy 数组，并保留属性 dtype
 3. **批量操作**：所有操作都针对批量数据优化，不支持单点访问
 4. **明确错误**：提供清晰的中文错误消息
 

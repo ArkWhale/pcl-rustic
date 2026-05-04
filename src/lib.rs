@@ -7,6 +7,7 @@ mod registration;
 mod utils;
 
 use interop::numpy::{attribute_to_numpy, read_attribute_from_pyany};
+use io::table::TableColumnNames;
 use neighbors::normals::NormalSearch;
 use neighbors::octree::Octree;
 use point_cloud::core::HighPerformancePointCloud;
@@ -616,9 +617,122 @@ impl PyPointCloud {
         Ok(PyPointCloud { inner })
     }
 
+    #[staticmethod]
+    #[pyo3(signature = (path, delimiter = 44, x = None, y = None, z = None, intensity = None, rgb_r = None, rgb_g = None, rgb_b = None))]
+    fn from_csv(
+        path: &str,
+        delimiter: u8,
+        x: Option<String>,
+        y: Option<String>,
+        z: Option<String>,
+        intensity: Option<String>,
+        rgb_r: Option<String>,
+        rgb_g: Option<String>,
+        rgb_b: Option<String>,
+    ) -> PyResult<Self> {
+        let columns = table_columns(x, y, z, intensity, rgb_r, rgb_g, rgb_b);
+        let inner = HighPerformancePointCloud::from_table_csv(path, delimiter, columns)
+            .map_err(PyErr::from)?;
+        Ok(PyPointCloud { inner })
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (path, x = None, y = None, z = None, intensity = None, rgb_r = None, rgb_g = None, rgb_b = None))]
+    fn from_parquet(
+        path: &str,
+        x: Option<String>,
+        y: Option<String>,
+        z: Option<String>,
+        intensity: Option<String>,
+        rgb_r: Option<String>,
+        rgb_g: Option<String>,
+        rgb_b: Option<String>,
+    ) -> PyResult<Self> {
+        let columns = table_columns(x, y, z, intensity, rgb_r, rgb_g, rgb_b);
+        let inner =
+            HighPerformancePointCloud::from_table_parquet(path, columns).map_err(PyErr::from)?;
+        Ok(PyPointCloud { inner })
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (path, x = None, y = None, z = None, intensity = None, rgb_r = None, rgb_g = None, rgb_b = None))]
+    fn load_from_file(
+        path: &str,
+        x: Option<String>,
+        y: Option<String>,
+        z: Option<String>,
+        intensity: Option<String>,
+        rgb_r: Option<String>,
+        rgb_g: Option<String>,
+        rgb_b: Option<String>,
+    ) -> PyResult<Self> {
+        let columns = table_columns(x, y, z, intensity, rgb_r, rgb_g, rgb_b);
+        let inner =
+            HighPerformancePointCloud::load_from_file(path, Some(columns)).map_err(PyErr::from)?;
+        Ok(PyPointCloud { inner })
+    }
+
     #[pyo3(signature = (path, compress = false))]
     fn to_las(&self, path: &str, compress: bool) -> PyResult<()> {
         self.inner.to_las(path, compress).map_err(PyErr::from)?;
+        Ok(())
+    }
+
+    #[pyo3(signature = (path, delimiter = 44, x = None, y = None, z = None, intensity = None, rgb_r = None, rgb_g = None, rgb_b = None))]
+    fn to_csv(
+        &self,
+        path: &str,
+        delimiter: u8,
+        x: Option<String>,
+        y: Option<String>,
+        z: Option<String>,
+        intensity: Option<String>,
+        rgb_r: Option<String>,
+        rgb_g: Option<String>,
+        rgb_b: Option<String>,
+    ) -> PyResult<()> {
+        let columns = table_columns(x, y, z, intensity, rgb_r, rgb_g, rgb_b);
+        self.inner
+            .to_table_csv(path, delimiter, columns)
+            .map_err(PyErr::from)?;
+        Ok(())
+    }
+
+    #[pyo3(signature = (path, x = None, y = None, z = None, intensity = None, rgb_r = None, rgb_g = None, rgb_b = None))]
+    fn to_parquet(
+        &self,
+        path: &str,
+        x: Option<String>,
+        y: Option<String>,
+        z: Option<String>,
+        intensity: Option<String>,
+        rgb_r: Option<String>,
+        rgb_g: Option<String>,
+        rgb_b: Option<String>,
+    ) -> PyResult<()> {
+        let columns = table_columns(x, y, z, intensity, rgb_r, rgb_g, rgb_b);
+        self.inner
+            .to_table_parquet(path, columns)
+            .map_err(PyErr::from)?;
+        Ok(())
+    }
+
+    #[pyo3(signature = (path, x = None, y = None, z = None, intensity = None, rgb_r = None, rgb_g = None, rgb_b = None))]
+    fn save_to_file(
+        &self,
+        path: &str,
+        x: Option<String>,
+        y: Option<String>,
+        z: Option<String>,
+        intensity: Option<String>,
+        rgb_r: Option<String>,
+        rgb_g: Option<String>,
+        rgb_b: Option<String>,
+    ) -> PyResult<()> {
+        let columns = table_columns(x, y, z, intensity, rgb_r, rgb_g, rgb_b);
+        self.inner
+            .save_to_file(path, Some(columns))
+            .map_err(PyErr::from)?;
         Ok(())
     }
 
@@ -683,19 +797,6 @@ impl PyDownsampleStrategy {
     #[allow(non_snake_case)]
     fn AVERAGE() -> i32 {
         2
-    }
-
-    // Keep old names as aliases for backwards compat during transition
-    #[classattr]
-    #[allow(non_snake_case)]
-    fn RANDOM() -> i32 {
-        0
-    }
-
-    #[classattr]
-    #[allow(non_snake_case)]
-    fn CENTROID() -> i32 {
-        1
     }
 }
 
@@ -973,4 +1074,16 @@ fn read_matrix4(obj: &Bound<'_, pyo3::PyAny>) -> PyResult<nalgebra::Matrix4<f32>
     Ok(nalgebra::Matrix4::from_row_slice(
         &rows.into_iter().flatten().collect::<Vec<_>>(),
     ))
+}
+
+fn table_columns(
+    x: Option<String>,
+    y: Option<String>,
+    z: Option<String>,
+    intensity: Option<String>,
+    rgb_r: Option<String>,
+    rgb_g: Option<String>,
+    rgb_b: Option<String>,
+) -> TableColumnNames {
+    TableColumnNames::resolve(x, y, z, intensity, rgb_r, rgb_g, rgb_b)
 }

@@ -1,6 +1,6 @@
 # RFC-0002: API Reset & Typed Attributes (M1)
 
-- **Status:** Proposed
+- **Status:** Partial
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
@@ -119,12 +119,12 @@ pc.voxel_downsample(voxel_size: float, strategy: int, *, seed: int | None = None
 
 ## 5. Acceptance criteria
 
-- [ ] `AttributeValue` enum implemented with `Tensor1<_, T>` for the eight listed dtypes.
-- [ ] Intensity and RGB are stored as standard attributes; the legacy `Option<Tensor1>` fields removed.
+- [ ] `AttributeValue` enum implemented with `Tensor1<_, T>` for the eight listed dtypes. The enum exists for the listed dtypes, but current storage is host `Vec<T>`, not typed Burn tensors.
+- [x] Intensity and RGB are stored as standard attributes; the legacy `Option<Tensor1>` fields removed.
 - [ ] `get_xyz`, `get_intensity`, `get_rgb`, `get_attribute` use the new zero-copy path; benchmark shows ≥ 10× speedup on the getter for a 10M-point cloud vs. the current `Vec<Vec<f32>>` materialization.
-- [ ] `PointCloud.from_xyz` accepts f32/f64/i32/i64 NumPy; `tests/test_point_cloud.py` adds `test_autocast_f64_input`, `test_autocast_int_input`, `test_reject_string_input`.
-- [ ] `DownsampleStrategy` exposes `RANDOM_SEEDED`, `NEAREST_TO_CENTROID`, `AVERAGE`; the legacy middle-index bug is gone; seeded determinism is tested with two runs under the same seed yielding identical outputs.
-- [ ] Repo hygiene items in §3.5 shipped; `pyproject.toml::readme` points to `README.md`.
+- [x] `PointCloud.from_xyz` accepts f32/f64/i32/i64 NumPy; `tests/test_point_cloud.py` adds `test_autocast_f64_input`, `test_autocast_int_input`, `test_reject_string_input`.
+- [x] `DownsampleStrategy` exposes `RANDOM_SEEDED`, `NEAREST_TO_CENTROID`, `AVERAGE`; the legacy middle-index bug is gone; seeded determinism is tested with two runs under the same seed yielding identical outputs.
+- [x] Repo hygiene items in §3.5 shipped; `pyproject.toml::readme` points to `README.md`, RFCs are in MkDocs nav, and the README now points to RFC-0001 for roadmap tracking.
 - [ ] `multica-home/knowledge/projects/pcl-rustic.md` written.
 - [ ] All existing tests pass; added tests above pass; `just ci` is green on Linux, macOS, Windows.
 

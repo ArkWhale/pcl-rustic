@@ -33,7 +33,12 @@ examples, and automation.
 - `set_attribute()` / `get_attribute()` preserve NumPy dtypes for covered
   scalar attributes.
 - `DownsampleStrategy.RANDOM_SEEDED`, `NEAREST_TO_CENTROID`, and `AVERAGE`
-  are exposed, and seeded determinism is tested.
+  are exposed, legacy `RANDOM` / `CENTROID` aliases are removed, and seeded
+  determinism is tested.
+- Python CSV/Parquet/load/save wrappers are exposed for the existing Rust table
+  I/O implementation.
+- 1D NumPy attribute inputs now accept strided views, so common expressions such
+  as `rgb[:, 0]` work without caller-side copies.
 - `pyproject.toml` now points to `README.md`, and RFC docs are in MkDocs nav.
 
 ### RFC-0003 - Coordinate Ops & Selection
@@ -162,7 +167,7 @@ examples, and automation.
 - `get_xyz()` and `attribute_to_numpy()` clone/materialize arrays; the
   zero-copy getter path is not implemented.
 - No 10M-point getter benchmark or documented 10x speedup.
-- Legacy Python aliases `DownsampleStrategy.RANDOM` and `CENTROID` remain.
+- Full tensor-backed typed attributes and zero-copy getters remain open.
 - `multica-home/knowledge/projects/pcl-rustic.md` is not present in this repo.
 
 ### RFC-0003
@@ -223,7 +228,42 @@ examples, and automation.
 - The docs renderer exists, but release benchmark results still need to be
   produced on recorded hardware before publishing measured performance rows.
 
+## 2026-05-04 Cleanup Pass
+
+- Removed the legacy Python `DownsampleStrategy.RANDOM` and
+  `DownsampleStrategy.CENTROID` aliases from the PyO3 class and `.pyi` stub.
+- Updated tests and examples to use `RANDOM_SEEDED`,
+  `NEAREST_TO_CENTROID`, and explicit NumPy arrays where the API requires them.
+- Exposed Python wrappers for the existing Rust table I/O implementation:
+  `from_csv`, `to_csv`, `from_parquet`, `to_parquet`, `load_from_file`, and
+  `save_to_file`.
+- Added round-trip coverage for CSV/Parquet table I/O and an assertion that the
+  old downsample aliases are no longer exported.
+- Updated docs to stop claiming current zero-copy getters, clarify current
+  standard-attribute table export behavior, and point README roadmap readers to
+  the RFC index.
+- Updated RFC status headers and acceptance checkboxes:
+  - RFC-0001 is now marked `Active roadmap`.
+  - RFC-0002, RFC-0003, RFC-0005, RFC-0006, and RFC-0007 are marked `Partial`.
+  - RFC-0008 is marked `Implemented (staged GICP follow-up open)`.
+  - RFC-0009 is marked `Implemented`.
+
 ## Verification Snapshot
+
+Fresh verification from the 2026-05-04 cleanup pass:
+
+- `cargo test --lib` passed: 17/17 Rust unit tests. Rust emitted existing
+  dead-code warnings for unused helpers and staged fields.
+- `uv run ruff check tests/test_point_cloud.py examples/basic_usage.py` passed.
+- `uv run pytest tests/test_point_cloud.py -q --no-cov` passed: 46/46 Python
+  integration tests.
+- `uv run --project /Users/lz/Codes/github/pcl-rustic python
+  /Users/lz/Codes/github/pcl-rustic/examples/basic_usage.py` completed from
+  `/private/tmp`.
+- `uv run mkdocs build` could not start because the docs group was not
+  installed in the active environment. `uv run --group docs mkdocs build`
+  downloaded dependencies but did not complete before the session was closed at
+  user request.
 
 Previous session evidence recorded:
 

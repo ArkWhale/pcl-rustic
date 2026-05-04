@@ -1,6 +1,6 @@
 # RFC-0003: Coordinate Ops & Selection (M2)
 
-- **Status:** Proposed
+- **Status:** Partial
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
@@ -127,12 +127,12 @@ Both examples load a test LAS file from `tests/data/` (add a small 10k-point fix
 
 ## 4. Acceptance criteria
 
-- [ ] `select(mask)`, `select_indices(indices)` implemented and tested; operate in place on the Burn tensor device.
-- [ ] `select_where`, `select_by_classification`, `select_return_number`, `select_intensity_range`, `select_elevation_range` implemented and tested with LAS fixtures.
-- [ ] `crop_aabb`, `crop_obb`, `aabb()`, `obb()` implemented and tested.
-- [ ] `concatenate(&[&Self], ConcatPolicy)` implemented and tested for all three policies.
-- [ ] `translate`, `scale`, `rotate` match Open3D semantics; doc page at `docs/api/transform.md` updated.
-- [ ] Both end-to-end example scripts run to completion against the test fixture, produce expected point-count reductions, and are referenced from `docs/getting-started/examples.md`.
+- [ ] `select(mask)`, `select_indices(indices)` implemented and tested; operate in place on the Burn tensor device. Current implementation is host-backed, not device-native.
+- [ ] `select_where`, `select_by_classification`, `select_return_number`, `select_intensity_range`, `select_elevation_range` implemented and tested with LAS fixtures. Synthetic tests exist; LAS fixture coverage is still open.
+- [x] `crop_aabb`, `crop_obb`, `aabb()`, `obb()` implemented and tested.
+- [x] `concatenate(&[&Self], ConcatPolicy)` implemented and tested for all three policies.
+- [x] `translate`, `scale`, `rotate` match Open3D semantics; doc page at `docs/api/transform.md` updated.
+- [ ] Both end-to-end example scripts run to completion against the test fixture, produce expected point-count reductions, and are referenced from `docs/getting-started/examples.md`. The scripts are present and documented, but fixture-backed acceptance is still open.
 - [ ] New tests cover: empty input, single-cloud concat, dtype-mismatch `ConcatPolicy::Strict` rejection, classification round-trip (LAS → select_by_classification([2]) → LAS → read back → same subset).
 
 ## 5. Risks & mitigations

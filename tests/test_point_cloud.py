@@ -45,7 +45,7 @@ class TestPointCloudLifecycle:
         np.testing.assert_allclose(pc.get_xyz(), xyz.astype(np.float32))
 
     def test_reject_string_input(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             PointCloud.from_xyz(np.array([["x", "y", "z"]], dtype=str))
 
     def test_clone_point_cloud(self):
@@ -319,7 +319,7 @@ class TestVoxelDownsample:
         )
         pc = PointCloud.from_xyz(xyz)
 
-        downsampled = pc.voxel_downsample(1.0, DownsampleStrategy.RANDOM)
+        downsampled = pc.voxel_downsample(1.0, DownsampleStrategy.RANDOM_SEEDED)
 
         # 下采样后应该有 2 个点（每个体素 1 个）
         assert downsampled.point_count() <= pc.point_count()
@@ -333,7 +333,7 @@ class TestVoxelDownsample:
         )
         pc = PointCloud.from_xyz(xyz)
 
-        downsampled = pc.voxel_downsample(1.0, DownsampleStrategy.CENTROID)
+        downsampled = pc.voxel_downsample(1.0, DownsampleStrategy.NEAREST_TO_CENTROID)
 
         assert downsampled.point_count() <= pc.point_count()
 
@@ -347,7 +347,7 @@ class TestVoxelDownsample:
         pc = PointCloud.from_xyz(xyz)
         pc.set_intensity(intensity)
 
-        downsampled = pc.voxel_downsample(1.0, DownsampleStrategy.RANDOM)
+        downsampled = pc.voxel_downsample(1.0, DownsampleStrategy.RANDOM_SEEDED)
 
         assert downsampled.has_intensity()
         result_intensity = downsampled.get_intensity()
@@ -360,7 +360,7 @@ class TestVoxelDownsample:
         pc = PointCloud.from_xyz(xyz)
 
         with pytest.raises(ValueError):
-            pc.voxel_downsample(-1.0, DownsampleStrategy.RANDOM)
+            pc.voxel_downsample(-1.0, DownsampleStrategy.RANDOM_SEEDED)
 
     def test_seeded_random_is_deterministic(self):
         xyz = np.column_stack(
@@ -522,6 +522,43 @@ class TestNeighborsNormalsOutliersRegistration:
             )
 
 
+class TestTableIo:
+    def test_csv_and_parquet_round_trip(self, tmp_path):
+        xyz = np.array(
+            [[0.0, 1.0, 2.0], [3.0, 4.0, 5.0], [6.0, 7.0, 8.0]],
+            dtype=np.float32,
+        )
+        intensity = np.array([0.1, 0.2, 0.3], dtype=np.float32)
+        rgb = np.array([[10, 20, 30], [40, 50, 60], [70, 80, 90]], dtype=np.uint8)
+        pc = PointCloud.from_xyz(xyz)
+        pc.set_intensity(intensity)
+        pc.set_rgb(rgb[:, 0], rgb[:, 1], rgb[:, 2])
+
+        csv_path = tmp_path / "points.csv"
+        parquet_path = tmp_path / "points.parquet"
+        auto_path = tmp_path / "points_auto.parquet"
+
+        pc.to_csv(str(csv_path), delimiter=ord(","))
+        csv_loaded = PointCloud.from_csv(str(csv_path), delimiter=ord(","))
+        np.testing.assert_allclose(csv_loaded.get_xyz(), xyz)
+        np.testing.assert_allclose(csv_loaded.get_intensity(), intensity)
+        np.testing.assert_array_equal(csv_loaded.get_rgb()[0], rgb[:, 0])
+
+        pc.to_parquet(str(parquet_path))
+        parquet_loaded = PointCloud.from_parquet(str(parquet_path))
+        np.testing.assert_allclose(parquet_loaded.get_xyz(), xyz)
+        np.testing.assert_allclose(parquet_loaded.get_intensity(), intensity)
+        np.testing.assert_array_equal(parquet_loaded.get_rgb()[1], rgb[:, 1])
+
+        pc.save_to_file(str(auto_path))
+        auto_loaded = PointCloud.load_from_file(str(auto_path))
+        np.testing.assert_allclose(auto_loaded.get_xyz(), xyz)
+
+    def test_downsample_legacy_aliases_removed(self):
+        assert not hasattr(DownsampleStrategy, "RANDOM")
+        assert not hasattr(DownsampleStrategy, "CENTROID")
+
+
 class TestMemoryAndRepr:
     """内存和表示测试"""
 
@@ -569,7 +606,7 @@ class TestEdgeCases:
         """测试空点云下采样应该抛出错误"""
         pc = PointCloud()
         with pytest.raises(ValueError):
-            pc.voxel_downsample(1.0, DownsampleStrategy.RANDOM)
+            pc.voxel_downsample(1.0, DownsampleStrategy.RANDOM_SEEDED)
 
     def test_zero_points_properties(self):
         """测试空点云的属性操作"""
@@ -608,7 +645,7 @@ class TestIntegration:
 
         # 4. 下采样
         pc_downsampled = pc_transformed.voxel_downsample(
-            1.0, DownsampleStrategy.CENTROID
+            1.0, DownsampleStrategy.NEAREST_TO_CENTROID
         )
 
         # 5. 验证结果
@@ -624,7 +661,9 @@ class TestIntegration:
 
         # 变换 -> 下采样
         matrix = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
-        result = pc.transform(matrix).voxel_downsample(2.0, DownsampleStrategy.RANDOM)
+        result = pc.transform(matrix).voxel_downsample(
+            2.0, DownsampleStrategy.RANDOM_SEEDED
+        )
 
         assert result.point_count() > 0
         assert result.point_count() <= pc.point_count()

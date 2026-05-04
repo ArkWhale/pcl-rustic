@@ -1,6 +1,6 @@
 # RFC-0009: Large-Scale Benchmark Suite
 
-- **Status:** Proposed
+- **Status:** Implemented
 - **Date:** 2026-05-04
 - **Author:** Codex implementation agent
 - **Related:** RFC-0003, RFC-0004, RFC-0005
@@ -146,16 +146,16 @@ uv run pytest tests/test_benchmark.py -v -s --benchmark-mode=smoke
 
 ## 4. Acceptance Criteria
 
-- [ ] `tests/test_benchmark.py` supports smoke, standard, and full modes.
-- [ ] The concat matrix covers 20-200 clouds of 10M points each in full mode.
-- [ ] The downsampling matrix covers 20M-400M points in full mode.
-- [ ] C20 target workload reports concatenate-only and concatenate+voxelize
+- [x] `tests/test_benchmark.py` supports smoke, standard, and full modes.
+- [x] The concat matrix covers 20-200 clouds of 10M points each in full mode.
+- [x] The downsampling matrix covers 20M-400M points in full mode.
+- [x] C20 target workload reports concatenate-only and concatenate+voxelize
       timings.
-- [ ] Benchmark output writes CSV to `reports/benchmarks/`.
-- [ ] Release benchmark output can regenerate `docs/performance/benchmarks.md`.
-- [ ] CI runs smoke mode through `just benchmark-smoke`.
-- [ ] Full mode is documented as requiring a high-memory benchmark runner.
-- [ ] Benchmarks include typed attributes listed in §3.1, not XYZ-only data.
+- [x] Benchmark output writes CSV to `reports/benchmarks/`.
+- [x] Release benchmark output can regenerate `docs/performance/benchmarks.md`.
+- [x] CI runs smoke mode through `just benchmark-smoke`.
+- [x] Full mode is documented as requiring a high-memory benchmark runner.
+- [x] Benchmarks include typed attributes listed in §3.1, not XYZ-only data.
 
 ## 5. Risks & Mitigations
 
@@ -182,4 +182,3 @@ uv run pytest tests/test_benchmark.py -v -s --benchmark-mode=smoke
   regenerated every time for I/O isolation.
 - Whether peak memory should use platform-specific RSS sampling or an optional
   Python dependency such as `psutil`.
-

@@ -1,6 +1,6 @@
 use crate::point_cloud::attribute_value::AttributeValue;
 use crate::point_cloud::core::HighPerformancePointCloud;
-use crate::utils::error::Result;
+use crate::utils::error::{PointCloudError, Result};
 use crate::utils::tensor;
 use numpy::ndarray::{Array1, Array2};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyUntypedArrayMethods};
@@ -197,7 +197,9 @@ fn read_xyz_from_pyany(obj: &Bound<'_, pyo3::PyAny>) -> Result<Tensor2> {
         return tensor::tensor2_from_slice(&f32_data, shape[0], shape[1]);
     }
 
-    Err("xyz must be a 2D numpy array with dtype float32, float64, int32, or int64".into())
+    Err(PointCloudError::InvalidParameter(
+        "xyz must be a 2D numpy array with dtype float32, float64, int32, or int64".to_string(),
+    ))
 }
 
 pub fn read_attribute_from_pyany(obj: &Bound<'_, pyo3::PyAny>) -> Result<AttributeValue> {
@@ -219,50 +221,58 @@ pub fn read_attribute_from_pyany(obj: &Bound<'_, pyo3::PyAny>) -> Result<Attribu
     // Try f32
     if let Ok(arr) = obj.cast::<PyArray1<f32>>() {
         let readonly = arr.readonly();
-        let slice = readonly.as_slice().map_err(|_| "cannot read array data")?;
-        return Ok(AttributeValue::F32(slice.to_vec()));
+        return Ok(AttributeValue::F32(
+            readonly.as_array().iter().copied().collect(),
+        ));
     }
     // Try f64
     if let Ok(arr) = obj.cast::<PyArray1<f64>>() {
         let readonly = arr.readonly();
-        let slice = readonly.as_slice().map_err(|_| "cannot read array data")?;
-        return Ok(AttributeValue::F64(slice.to_vec()));
+        return Ok(AttributeValue::F64(
+            readonly.as_array().iter().copied().collect(),
+        ));
     }
     // Try u8
     if let Ok(arr) = obj.cast::<PyArray1<u8>>() {
         let readonly = arr.readonly();
-        let slice = readonly.as_slice().map_err(|_| "cannot read array data")?;
-        return Ok(AttributeValue::U8(slice.to_vec()));
+        return Ok(AttributeValue::U8(
+            readonly.as_array().iter().copied().collect(),
+        ));
     }
     // Try u16
     if let Ok(arr) = obj.cast::<PyArray1<u16>>() {
         let readonly = arr.readonly();
-        let slice = readonly.as_slice().map_err(|_| "cannot read array data")?;
-        return Ok(AttributeValue::U16(slice.to_vec()));
+        return Ok(AttributeValue::U16(
+            readonly.as_array().iter().copied().collect(),
+        ));
     }
     // Try u32
     if let Ok(arr) = obj.cast::<PyArray1<u32>>() {
         let readonly = arr.readonly();
-        let slice = readonly.as_slice().map_err(|_| "cannot read array data")?;
-        return Ok(AttributeValue::U32(slice.to_vec()));
+        return Ok(AttributeValue::U32(
+            readonly.as_array().iter().copied().collect(),
+        ));
     }
     // Try i32
     if let Ok(arr) = obj.cast::<PyArray1<i32>>() {
         let readonly = arr.readonly();
-        let slice = readonly.as_slice().map_err(|_| "cannot read array data")?;
-        return Ok(AttributeValue::I32(slice.to_vec()));
+        return Ok(AttributeValue::I32(
+            readonly.as_array().iter().copied().collect(),
+        ));
     }
     // Try i64
     if let Ok(arr) = obj.cast::<PyArray1<i64>>() {
         let readonly = arr.readonly();
-        let slice = readonly.as_slice().map_err(|_| "cannot read array data")?;
-        return Ok(AttributeValue::I64(slice.to_vec()));
+        return Ok(AttributeValue::I64(
+            readonly.as_array().iter().copied().collect(),
+        ));
     }
     // Try bool
     if let Ok(arr) = obj.cast::<PyArray1<bool>>() {
         let readonly = arr.readonly();
-        let slice = readonly.as_slice().map_err(|_| "cannot read array data")?;
-        return Ok(AttributeValue::Bool(slice.to_vec()));
+        return Ok(AttributeValue::Bool(
+            readonly.as_array().iter().copied().collect(),
+        ));
     }
 
     Err("attribute must be a 1D numpy array with a numeric or bool dtype".into())
