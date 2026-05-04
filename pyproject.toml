@@ -2,7 +2,7 @@
 name = "pcl-rustic"
 version = "0.1.0"
 description = "高性能Python点云运算库 - 基于Rust burn张量的批量运算"
-readme = "ai_doc/README.md"
+readme = "README.md"
 authors = [
     { name = "liuzhen19", email = "liuzhen19@xiaomi.com" }
 ]
@@ -31,6 +31,7 @@ build-backend = "maturin"
 [dependency-groups]
 dev = [
     "loguru>=0.7.3",
+    "maturin>=1.13.1",
     "pytest>=8.4.2",
 ]
 docs = [

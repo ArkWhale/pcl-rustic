@@ -1,245 +1,220 @@
-use crate::traits::{PointCloudCore, PointCloudProperties};
-use crate::utils::error::Result;
+use crate::point_cloud::attribute_value::AttributeValue;
+use crate::utils::error::{PointCloudError, Result};
 use crate::utils::tensor;
-use crate::utils::tensor::{Tensor1, Tensor2};
-/// 点云核心Struct定义、基础生命周期方法
+use crate::utils::tensor::Tensor2;
 use std::collections::HashMap;
 
-/// 高性能点云结构体
-/// 所有字段私有，仅通过Trait方法/公有接口暴露批量操作
 #[derive(Clone)]
 pub struct HighPerformancePointCloud {
-    // 必选：XYZ三维坐标（形状[M,3]，M为点数）
     xyz: Tensor2,
-
-    // 可选：强度值（形状[M,]）
-    intensity: Option<Tensor1>,
-
-    // 可选：RGB颜色（3个独立通道，各为形状[M,]）
-    rgb_r: Option<Tensor1>,
-    rgb_g: Option<Tensor1>,
-    rgb_b: Option<Tensor1>,
-
-    // 自定义属性字典
-    attributes: HashMap<String, Tensor1>,
+    attributes: HashMap<String, AttributeValue>,
 }
 
 impl HighPerformancePointCloud {
-    /// 创建空的点云实例
     pub fn new() -> Self {
         Self {
             xyz: tensor::empty_xyz(),
-            intensity: None,
-            rgb_r: None,
-            rgb_g: None,
-            rgb_b: None,
             attributes: HashMap::new(),
         }
     }
 
-    // ============ 从 Tensor 直接初始化（零拷贝内部传递）============
-
-    /// 从 XYZ Tensor2 直接初始化（内部使用，接受已创建的 Tensor）
     pub fn from_tensor_xyz(xyz: Tensor2) -> Result<Self> {
         let cols = tensor::tensor2_cols(&xyz);
         if cols != 3 {
-            return Err(format!("XYZ张量列数必须为3，实际为{}", cols).into());
+            return Err(PointCloudError::TensorShapeError(format!(
+                "XYZ tensor must have 3 columns, got {}",
+                cols
+            )));
         }
         Ok(Self {
             xyz,
-            intensity: None,
-            rgb_r: None,
-            rgb_g: None,
-            rgb_b: None,
             attributes: HashMap::new(),
         })
     }
 
-    // ============ 原有 Vec 接口（保留向后兼容）============
-
-    /// 从XYZ张量初始化点云
-    /// xyz: [M,3]形状的坐标矩阵
-    pub fn from_xyz(xyz: Vec<Vec<f32>>) -> Result<Self> {
-        tensor::validate_xyz_shape(&xyz)?;
-
-        let xyz = tensor::xyz_to_tensor(xyz)?;
-
+    pub fn from_xyz_vec(xyz: Vec<[f32; 3]>) -> Result<Self> {
+        if xyz.is_empty() {
+            return Err(PointCloudError::TensorShapeError(
+                "XYZ data is empty".to_string(),
+            ));
+        }
+        let flat: Vec<f32> = xyz.iter().flat_map(|p| p.iter().copied()).collect();
+        let t = tensor::tensor2_from_slice(&flat, xyz.len(), 3)?;
         Ok(Self {
-            xyz,
-            intensity: None,
-            rgb_r: None,
-            rgb_g: None,
-            rgb_b: None,
+            xyz: t,
             attributes: HashMap::new(),
         })
     }
 
-    /// 获取内部XYZ的可变引用（仅内部使用）
-    pub(crate) fn xyz_mut(&mut self) -> &mut Tensor2 {
-        &mut self.xyz
+    pub fn from_xyz(xyz: Vec<Vec<f32>>) -> Result<Self> {
+        if xyz.is_empty() {
+            return Err(PointCloudError::TensorShapeError(
+                "XYZ data is empty".to_string(),
+            ));
+        }
+        if !xyz.iter().all(|row| row.len() == 3) {
+            return Err(PointCloudError::TensorShapeError(
+                "XYZ must have shape [N, 3]".to_string(),
+            ));
+        }
+        let t = tensor::xyz_to_tensor(xyz)?;
+        Ok(Self {
+            xyz: t,
+            attributes: HashMap::new(),
+        })
     }
 
-    /// 获取内部XYZ的不可变引用（仅内部使用）
-    pub(crate) fn xyz_ref(&self) -> &Tensor2 {
+    pub fn point_count(&self) -> usize {
+        tensor::tensor2_rows(&self.xyz)
+    }
+
+    pub fn xyz_ref(&self) -> &Tensor2 {
         &self.xyz
     }
 
-    /// 获取内部intensity的可变引用（仅内部使用）
-    pub(crate) fn intensity_mut(&mut self) -> &mut Option<Tensor1> {
-        &mut self.intensity
+    pub fn xyz_mut(&mut self) -> &mut Tensor2 {
+        &mut self.xyz
     }
 
-    /// 获取内部intensity的不可变引用（仅内部使用）
-    pub(crate) fn intensity_ref(&self) -> Option<&Tensor1> {
-        self.intensity.as_ref()
+    pub fn get_xyz_vec(&self) -> Vec<[f32; 3]> {
+        let data = tensor::tensor2_to_vec(&self.xyz);
+        data.into_iter()
+            .map(|row| [row[0], row[1], row[2]])
+            .collect()
     }
 
-    /// 获取内部RGB通道的可变引用（仅内部使用）
-    pub(crate) fn rgb_channels_mut(
-        &mut self,
-    ) -> (
-        &mut Option<Tensor1>,
-        &mut Option<Tensor1>,
-        &mut Option<Tensor1>,
-    ) {
-        (&mut self.rgb_r, &mut self.rgb_g, &mut self.rgb_b)
+    pub fn get_xyz_flat(&self) -> Vec<f32> {
+        let data = self.xyz.to_data();
+        data.to_vec::<f32>()
+            .expect("Failed to convert XYZ tensor to Vec<f32>")
     }
 
-    /// 获取内部RGB通道的不可变引用（仅内部使用）
-    pub(crate) fn rgb_channels_ref(
-        &self,
-    ) -> (Option<&Tensor1>, Option<&Tensor1>, Option<&Tensor1>) {
-        (
-            self.rgb_r.as_ref(),
-            self.rgb_g.as_ref(),
-            self.rgb_b.as_ref(),
-        )
-    }
+    // === Attribute access ===
 
-    /// 获取内部属性字典的可变引用（仅内部使用）
-    pub(crate) fn attributes_mut(&mut self) -> &mut HashMap<String, Tensor1> {
-        &mut self.attributes
-    }
-
-    /// 获取内部属性字典的不可变引用（仅内部使用）
-    pub(crate) fn attributes_ref(&self) -> &HashMap<String, Tensor1> {
+    pub fn attributes(&self) -> &HashMap<String, AttributeValue> {
         &self.attributes
     }
 
-    /// 内存占用估算（字节）
+    pub fn attributes_mut(&mut self) -> &mut HashMap<String, AttributeValue> {
+        &mut self.attributes
+    }
+
+    pub fn get_attribute(&self, name: &str) -> Option<&AttributeValue> {
+        self.attributes.get(name)
+    }
+
+    pub fn set_attribute(&mut self, name: String, value: AttributeValue) -> Result<()> {
+        if !self.is_empty() && value.len() != self.point_count() {
+            return Err(PointCloudError::DimensionMismatch {
+                expected: self.point_count(),
+                actual: value.len(),
+            });
+        }
+        self.attributes.insert(name, value);
+        Ok(())
+    }
+
+    pub fn remove_attribute(&mut self, name: &str) -> Result<()> {
+        if self.attributes.remove(name).is_none() {
+            return Err(PointCloudError::InvalidParameter(format!(
+                "attribute '{}' does not exist",
+                name
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn attribute_names(&self) -> Vec<String> {
+        self.attributes.keys().cloned().collect()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.point_count() == 0
+    }
+
+    // === Convenience accessors for standard attributes ===
+
+    pub fn has_intensity(&self) -> bool {
+        self.attributes.contains_key("intensity")
+    }
+
+    pub fn has_rgb(&self) -> bool {
+        self.attributes.contains_key("red")
+            && self.attributes.contains_key("green")
+            && self.attributes.contains_key("blue")
+    }
+
+    pub fn has_normals(&self) -> bool {
+        self.attributes.contains_key("nx")
+            && self.attributes.contains_key("ny")
+            && self.attributes.contains_key("nz")
+    }
+
+    pub fn get_intensity_f32(&self) -> Option<&Vec<f32>> {
+        self.attributes.get("intensity").and_then(|v| v.as_f32())
+    }
+
+    pub fn get_classification_u8(&self) -> Option<&Vec<u8>> {
+        self.attributes
+            .get("classification")
+            .and_then(|v| v.as_u8())
+    }
+
+    // === Memory ===
+
     pub fn memory_usage(&self) -> usize {
-        let mut total = self.point_count() * 3 * std::mem::size_of::<f32>();
+        let xyz_bytes = self.point_count() * 3 * 4;
+        let attr_bytes: usize = self.attributes.values().map(|v| v.memory_usage()).sum();
+        xyz_bytes + attr_bytes
+    }
 
-        if let Some(intensity) = &self.intensity {
-            total += tensor::tensor1_len(intensity) * std::mem::size_of::<f32>();
+    // === Selection primitives (M2) ===
+
+    pub fn select_indices(&self, indices: &[usize]) -> Result<Self> {
+        if indices.is_empty() {
+            return Ok(Self::new());
+        }
+        let n = self.point_count();
+        for &idx in indices {
+            if idx >= n {
+                return Err(PointCloudError::InvalidParameter(format!(
+                    "index {} out of bounds for point cloud of size {}",
+                    idx, n
+                )));
+            }
         }
 
-        // RGB通道存储为f32
-        if let Some(r) = &self.rgb_r {
-            total += tensor::tensor1_len(r) * std::mem::size_of::<f32>();
-        }
-        if let Some(g) = &self.rgb_g {
-            total += tensor::tensor1_len(g) * std::mem::size_of::<f32>();
-        }
-        if let Some(b) = &self.rgb_b {
-            total += tensor::tensor1_len(b) * std::mem::size_of::<f32>();
-        }
+        let xyz_vec = self.get_xyz_vec();
+        let new_xyz: Vec<[f32; 3]> = indices.iter().map(|&i| xyz_vec[i]).collect();
 
-        for data in self.attributes.values() {
-            total += tensor::tensor1_len(data) * std::mem::size_of::<f32>();
+        let mut result = Self::from_xyz_vec(new_xyz)?;
+        for (name, attr) in &self.attributes {
+            result
+                .attributes
+                .insert(name.clone(), attr.gather(indices)?);
         }
+        Ok(result)
+    }
 
-        total
+    pub fn select_mask(&self, mask: &[bool]) -> Result<Self> {
+        if mask.len() != self.point_count() {
+            return Err(PointCloudError::DimensionMismatch {
+                expected: self.point_count(),
+                actual: mask.len(),
+            });
+        }
+        let indices: Vec<usize> = mask
+            .iter()
+            .enumerate()
+            .filter(|(_, &m)| m)
+            .map(|(i, _)| i)
+            .collect();
+        self.select_indices(&indices)
     }
 }
 
 impl Default for HighPerformancePointCloud {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl PointCloudCore for HighPerformancePointCloud {
-    fn get_xyz(&self) -> Vec<Vec<f32>> {
-        tensor::tensor2_to_vec(&self.xyz)
-    }
-
-    fn point_count(&self) -> usize {
-        tensor::tensor2_rows(&self.xyz)
-    }
-
-    fn has_intensity(&self) -> bool {
-        self.intensity.is_some()
-    }
-
-    fn has_rgb(&self) -> bool {
-        self.rgb_r.is_some() && self.rgb_g.is_some() && self.rgb_b.is_some()
-    }
-
-    fn get_intensity(&self) -> Option<Vec<f32>> {
-        self.intensity.as_ref().map(tensor::tensor1_to_vec)
-    }
-
-    fn get_rgb(&self) -> Option<(Vec<u8>, Vec<u8>, Vec<u8>)> {
-        match (&self.rgb_r, &self.rgb_g, &self.rgb_b) {
-            (Some(r), Some(g), Some(b)) => Some((
-                tensor::tensor1_to_u8_vec(r),
-                tensor::tensor1_to_u8_vec(g),
-                tensor::tensor1_to_u8_vec(b),
-            )),
-            _ => None,
-        }
-    }
-
-    fn attribute_names(&self) -> Vec<String> {
-        self.attributes.keys().cloned().collect()
-    }
-
-    fn get_attribute(&self, name: &str) -> Option<Vec<f32>> {
-        self.attributes.get(name).map(tensor::tensor1_to_vec)
-    }
-}
-
-impl PointCloudProperties for HighPerformancePointCloud {
-    fn set_intensity(&mut self, intensity: Vec<f32>) -> Result<()> {
-        tensor::validate_intensity_shape(&intensity, self.point_count())?;
-        self.intensity = Some(tensor::intensity_to_tensor(intensity));
-        Ok(())
-    }
-
-    fn set_rgb(&mut self, r: Vec<u8>, g: Vec<u8>, b: Vec<u8>) -> Result<()> {
-        let point_count = self.point_count();
-        tensor::validate_rgb_channel_shape(&r, point_count)?;
-        tensor::validate_rgb_channel_shape(&g, point_count)?;
-        tensor::validate_rgb_channel_shape(&b, point_count)?;
-
-        self.rgb_r = Some(tensor::rgb_channel_to_tensor(r));
-        self.rgb_g = Some(tensor::rgb_channel_to_tensor(g));
-        self.rgb_b = Some(tensor::rgb_channel_to_tensor(b));
-        Ok(())
-    }
-
-    fn add_attribute(&mut self, name: String, data: Vec<f32>) -> Result<()> {
-        if self.attributes.contains_key(&name) {
-            return Err(format!("属性'{}'已存在", name).into());
-        }
-        tensor::validate_attribute_shape(&data, self.point_count())?;
-        self.attributes
-            .insert(name, tensor::intensity_to_tensor(data));
-        Ok(())
-    }
-
-    fn set_attribute(&mut self, name: String, data: Vec<f32>) -> Result<()> {
-        tensor::validate_attribute_shape(&data, self.point_count())?;
-        self.attributes
-            .insert(name, tensor::intensity_to_tensor(data));
-        Ok(())
-    }
-
-    fn remove_attribute(&mut self, name: &str) -> Result<()> {
-        if self.attributes.remove(name).is_none() {
-            return Err(format!("属性'{}'不存在", name).into());
-        }
-        Ok(())
     }
 }

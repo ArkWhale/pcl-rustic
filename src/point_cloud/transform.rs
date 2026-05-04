@@ -1,124 +1,167 @@
-/// 坐标变换：矩阵乘法批量实现XYZ空间变换
 use crate::point_cloud::core::HighPerformancePointCloud;
-use crate::traits::CoordinateTransform;
+use crate::utils::error::Result;
+use crate::utils::tensor;
 use crate::utils::tensor::Backend;
-use crate::utils::{error::Result, tensor};
 use burn::tensor::{Tensor, TensorData};
 
-impl CoordinateTransform for HighPerformancePointCloud {
-    fn transform(&self, matrix: Vec<Vec<f32>>) -> Result<Self> {
-        let (rows, cols) = tensor::validate_matrix_shape(&matrix)?;
+impl HighPerformancePointCloud {
+    pub fn transform(&self, matrix: &[[f32; 4]; 4]) -> Result<Self> {
+        let flat: Vec<f32> = matrix.iter().flat_map(|row| row.iter().copied()).collect();
+        let mat_tensor = tensor::tensor2_from_slice(&flat, 4, 4)?;
+        let mat_t = mat_tensor.transpose();
 
-        let matrix_tensor = tensor::matrix_to_tensor(matrix)?;
-        let matrix_t = matrix_tensor.clone().transpose();
+        let xyz = self.xyz_ref().clone();
+        let n = self.point_count();
+
+        // Build homogeneous coordinates [N, 4]
+        let ones_data = TensorData::from(vec![1.0f32; n].as_slice());
+        let ones =
+            Tensor::<Backend, 1>::from_data(ones_data, &tensor::default_device()).reshape([n, 1]);
+        let homo = Tensor::cat(vec![xyz, ones], 1); // [N, 4]
+        let transformed = homo.matmul(mat_t); // [N, 4]
+
+        // Extract XYZ and divide by w
+        let new_xyz = transformed.clone().slice([0..n, 0..3]);
+        let w = transformed.slice([0..n, 3..4]); // [N, 1]
+        let new_xyz = new_xyz / w;
 
         let mut result = self.clone();
-        let xyz = self.xyz_ref().clone();
-
-        match (rows, cols) {
-            (3, 3) => {
-                // 3x3变换矩阵（旋转/缩放）
-                let new_xyz = xyz.matmul(matrix_t);
-                *result.xyz_mut() = new_xyz;
-            }
-            (4, 4) => {
-                // 4x4变换矩阵（齐次坐标，旋转+平移）
-                let xyz_vec = tensor::tensor2_to_vec(&xyz);
-                let mut homo_vec = Vec::with_capacity(xyz_vec.len());
-                for point in xyz_vec {
-                    homo_vec.push(vec![point[0], point[1], point[2], 1.0]);
-                }
-                let homo_tensor = tensor::vec2_to_tensor(homo_vec)?;
-                let new_homo = homo_tensor.matmul(matrix_t);
-                let new_homo_vec = tensor::tensor2_to_vec(&new_homo);
-
-                let mut new_xyz_vec = Vec::with_capacity(new_homo_vec.len());
-                for row in new_homo_vec {
-                    let w = row[3];
-                    new_xyz_vec.push(vec![row[0] / w, row[1] / w, row[2] / w]);
-                }
-                let new_xyz = tensor::xyz_to_tensor(new_xyz_vec)?;
-                *result.xyz_mut() = new_xyz;
-            }
-            _ => {
-                return Err("矩阵维度不支持".into());
-            }
-        }
-
+        *result.xyz_mut() = new_xyz;
         Ok(result)
     }
 
-    fn rigid_transform(&self, rotation: Vec<Vec<f32>>, translation: Vec<f32>) -> Result<Self> {
-        if translation.len() != 3 {
-            return Err("平移向量必须为3维".into());
-        }
+    pub fn transform_3x3(&self, matrix: &[[f32; 3]; 3]) -> Result<Self> {
+        let flat: Vec<f32> = matrix.iter().flat_map(|row| row.iter().copied()).collect();
+        let mat_tensor = tensor::tensor2_from_slice(&flat, 3, 3)?;
+        let mat_t = mat_tensor.transpose();
 
-        let (rows, cols) = tensor::validate_matrix_shape(&rotation)?;
-        if rows != 3 || cols != 3 {
-            return Err("旋转矩阵必须为3x3".into());
-        }
+        let xyz = self.xyz_ref().clone();
+        let new_xyz = xyz.matmul(mat_t);
 
-        let rotation_tensor = tensor::matrix_to_tensor(rotation)?;
-        let rotation_t = rotation_tensor.transpose();
+        let mut result = self.clone();
+        *result.xyz_mut() = new_xyz;
+        Ok(result)
+    }
+
+    pub fn translate(&self, t: [f32; 3]) -> Result<Self> {
+        let translation_data = TensorData::from(t.as_slice());
+        let translation_tensor =
+            Tensor::<Backend, 1>::from_data(translation_data, &tensor::default_device())
+                .reshape([1, 3]);
+
+        let mut result = self.clone();
+        let new_xyz = self.xyz_ref().clone() + translation_tensor;
+        *result.xyz_mut() = new_xyz;
+        Ok(result)
+    }
+
+    pub fn scale(&self, s: f32, center: Option<[f32; 3]>) -> Result<Self> {
+        let center = center.unwrap_or_else(|| self.compute_centroid_xyz());
+        let center_data = TensorData::from(center.as_slice());
+        let center_tensor =
+            Tensor::<Backend, 1>::from_data(center_data, &tensor::default_device()).reshape([1, 3]);
+
+        let xyz = self.xyz_ref().clone();
+        let centered = xyz - center_tensor.clone();
+        let scaled = centered * s;
+        let new_xyz = scaled + center_tensor;
+
+        let mut result = self.clone();
+        *result.xyz_mut() = new_xyz;
+        Ok(result)
+    }
+
+    pub fn rotate(&self, r: &[[f32; 3]; 3], center: Option<[f32; 3]>) -> Result<Self> {
+        let center = center.unwrap_or_else(|| self.compute_centroid_xyz());
+        let center_data = TensorData::from(center.as_slice());
+        let center_tensor =
+            Tensor::<Backend, 1>::from_data(center_data, &tensor::default_device()).reshape([1, 3]);
+
+        let flat: Vec<f32> = r.iter().flat_map(|row| row.iter().copied()).collect();
+        let rot_tensor = tensor::tensor2_from_slice(&flat, 3, 3)?;
+        let rot_t = rot_tensor.transpose();
+
+        let xyz = self.xyz_ref().clone();
+        let centered = xyz - center_tensor.clone();
+        let rotated = centered.matmul(rot_t);
+        let new_xyz = rotated + center_tensor;
+
+        let mut result = self.clone();
+        *result.xyz_mut() = new_xyz;
+        Ok(result)
+    }
+
+    pub fn rigid_transform(&self, rotation: &[[f32; 3]; 3], translation: [f32; 3]) -> Result<Self> {
+        let flat: Vec<f32> = rotation.iter().flat_map(|row| row.iter().copied()).collect();
+        let rot_tensor = tensor::tensor2_from_slice(&flat, 3, 3)?;
+        let rot_t = rot_tensor.transpose();
 
         let translation_data = TensorData::from(translation.as_slice());
         let translation_tensor =
             Tensor::<Backend, 1>::from_data(translation_data, &tensor::default_device())
                 .reshape([1, 3]);
 
-        let mut result = self.clone();
-
         let xyz = self.xyz_ref().clone();
-        let rotated = xyz.matmul(rotation_t);
-        let translated = rotated + translation_tensor;
-        *result.xyz_mut() = translated;
+        let rotated = xyz.matmul(rot_t);
+        let new_xyz = rotated + translation_tensor;
 
+        let mut result = self.clone();
+        *result.xyz_mut() = new_xyz;
         Ok(result)
+    }
+
+    fn compute_centroid_xyz(&self) -> [f32; 3] {
+        let xyz = self.get_xyz_vec();
+        if xyz.is_empty() {
+            return [0.0; 3];
+        }
+        let n = xyz.len() as f32;
+        let mut c = [0.0f32; 3];
+        for p in &xyz {
+            c[0] += p[0];
+            c[1] += p[1];
+            c[2] += p[2];
+        }
+        c[0] /= n;
+        c[1] /= n;
+        c[2] /= n;
+        c
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::traits::PointCloudCore;
 
     #[test]
-    fn test_3x3_transform() {
-        let xyz = vec![vec![1.0, 0.0, 0.0], vec![0.0, 1.0, 0.0]];
-        let pc = HighPerformancePointCloud::from_xyz(xyz).unwrap();
+    fn test_translate() {
+        let pc = HighPerformancePointCloud::from_xyz_vec(vec![[1.0, 0.0, 0.0]]).unwrap();
+        let result = pc.translate([1.0, 2.0, 3.0]).unwrap();
+        let xyz = result.get_xyz_vec();
+        assert!((xyz[0][0] - 2.0).abs() < 1e-5);
+        assert!((xyz[0][1] - 2.0).abs() < 1e-5);
+        assert!((xyz[0][2] - 3.0).abs() < 1e-5);
+    }
 
-        // 缩放矩阵（2x缩放）
-        let matrix = vec![
-            vec![2.0, 0.0, 0.0],
-            vec![0.0, 2.0, 0.0],
-            vec![0.0, 0.0, 2.0],
-        ];
-
-        let result = pc.transform(matrix).unwrap();
-        let xyz_result = result.get_xyz();
-
-        assert!((xyz_result[0][0] - 2.0).abs() < 1e-5, "X坐标变换失败");
+    #[test]
+    fn test_scale() {
+        let pc =
+            HighPerformancePointCloud::from_xyz_vec(vec![[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]])
+                .unwrap();
+        let result = pc.scale(2.0, Some([0.0, 0.0, 0.0])).unwrap();
+        let xyz = result.get_xyz_vec();
+        assert!((xyz[0][0] - 2.0).abs() < 1e-5);
+        assert!((xyz[1][0] + 2.0).abs() < 1e-5);
     }
 
     #[test]
     fn test_rigid_transform() {
-        let xyz = vec![vec![1.0, 0.0, 0.0]];
-        let pc = HighPerformancePointCloud::from_xyz(xyz).unwrap();
-
-        // 恒等旋转
-        let rotation = vec![
-            vec![1.0, 0.0, 0.0],
-            vec![0.0, 1.0, 0.0],
-            vec![0.0, 0.0, 1.0],
-        ];
-
-        let translation = vec![1.0, 2.0, 3.0];
-
-        let result = pc.rigid_transform(rotation, translation).unwrap();
-        let xyz_result = result.get_xyz();
-
-        assert!((xyz_result[0][0] - 2.0).abs() < 1e-5);
-        assert!((xyz_result[0][1] - 2.0).abs() < 1e-5);
-        assert!((xyz_result[0][2] - 3.0).abs() < 1e-5);
+        let pc = HighPerformancePointCloud::from_xyz_vec(vec![[1.0, 0.0, 0.0]]).unwrap();
+        let identity = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+        let result = pc.rigid_transform(&identity, [1.0, 2.0, 3.0]).unwrap();
+        let xyz = result.get_xyz_vec();
+        assert!((xyz[0][0] - 2.0).abs() < 1e-5);
+        assert!((xyz[0][1] - 2.0).abs() < 1e-5);
+        assert!((xyz[0][2] - 3.0).abs() < 1e-5);
     }
 }

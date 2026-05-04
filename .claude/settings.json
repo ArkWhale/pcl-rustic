@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo --version)",
+      "Bash(uv --version)",
+      "Bash(uv run *)",
+      "Bash(cargo check *)",
+      "Bash(cargo test *)",
+      "Bash(uv add *)",
+      "Bash(/Users/lz/Codes/github/pcl-rustic/.venv/bin/maturin develop *)",
+      "Bash(unset VIRTUAL_ENV)"
+    ]
+  }
+}

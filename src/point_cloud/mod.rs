@@ -1,5 +1,5 @@
-pub mod attributes;
-/// 点云模块入口
+pub mod attribute_value;
 pub mod core;
+pub mod selection;
 pub mod transform;
 pub mod voxel;

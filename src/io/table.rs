@@ -1,6 +1,5 @@
-/// 表格IO：使用 polars 统一 CSV/Parquet 读写
+use crate::point_cloud::attribute_value::AttributeValue;
 use crate::point_cloud::core::HighPerformancePointCloud;
-use crate::traits::{PointCloudCore, PointCloudProperties};
 use crate::utils::error::{PointCloudError, Result};
 use polars::prelude::*;
 use std::fs::File;
@@ -119,18 +118,20 @@ fn from_dataframe(df: DataFrame, columns: TableColumnNames) -> Result<HighPerfor
         });
     }
 
-    let mut xyz = Vec::with_capacity(x.len());
-    for i in 0..x.len() {
-        xyz.push(vec![x[i], y[i], z[i]]);
-    }
+    let xyz: Vec<[f32; 3]> = x
+        .iter()
+        .zip(y.iter())
+        .zip(z.iter())
+        .map(|((&xi, &yi), &zi)| [xi, yi, zi])
+        .collect();
 
-    let mut pc = HighPerformancePointCloud::from_xyz(xyz)?;
+    let mut pc = HighPerformancePointCloud::from_xyz_vec(xyz)?;
 
     if let Some(intensity_name) = &columns.intensity {
         if df.column(intensity_name).is_ok() {
             let intensity = get_f32_col(&df, intensity_name)?;
             if intensity.len() == pc.point_count() {
-                pc.set_intensity(intensity)?;
+                pc.set_attribute("intensity".to_string(), AttributeValue::F32(intensity))?;
             }
         }
     }
@@ -140,11 +141,11 @@ fn from_dataframe(df: DataFrame, columns: TableColumnNames) -> Result<HighPerfor
             let r = get_u8_col(&df, rn)?;
             let g = get_u8_col(&df, gn)?;
             let b = get_u8_col(&df, bn)?;
-            if r.len() == pc.point_count()
-                && g.len() == pc.point_count()
-                && b.len() == pc.point_count()
-            {
-                pc.set_rgb(r, g, b)?;
+            let n = pc.point_count();
+            if r.len() == n && g.len() == n && b.len() == n {
+                pc.set_attribute("red".to_string(), AttributeValue::U8(r))?;
+                pc.set_attribute("green".to_string(), AttributeValue::U8(g))?;
+                pc.set_attribute("blue".to_string(), AttributeValue::U8(b))?;
             }
         }
     }
@@ -156,15 +157,10 @@ fn to_dataframe(
     pc: &HighPerformancePointCloud,
     column_names: TableColumnNames,
 ) -> Result<DataFrame> {
-    let xyz = pc.get_xyz();
-    let mut x = Vec::with_capacity(xyz.len());
-    let mut y = Vec::with_capacity(xyz.len());
-    let mut z = Vec::with_capacity(xyz.len());
-    for point in xyz {
-        x.push(point[0]);
-        y.push(point[1]);
-        z.push(point[2]);
-    }
+    let xyz = pc.get_xyz_vec();
+    let x: Vec<f32> = xyz.iter().map(|p| p[0]).collect();
+    let y: Vec<f32> = xyz.iter().map(|p| p[1]).collect();
+    let z: Vec<f32> = xyz.iter().map(|p| p[2]).collect();
 
     let mut columns: Vec<Column> = vec![
         Column::new(PlSmallStr::from_str(&column_names.x), x),
@@ -173,8 +169,10 @@ fn to_dataframe(
     ];
 
     if let Some(name) = &column_names.intensity {
-        if let Some(intensity) = pc.get_intensity() {
-            columns.push(Column::new(PlSmallStr::from_str(name), intensity));
+        if let Some(attr) = pc.get_attribute("intensity") {
+            if let Some(v) = attr.as_f32() {
+                columns.push(Column::new(PlSmallStr::from_str(name), v.clone()));
+            }
         }
     }
 
@@ -183,24 +181,29 @@ fn to_dataframe(
         &column_names.rgb_g,
         &column_names.rgb_b,
     ) {
-        if let Some((r, g, b)) = pc.get_rgb() {
-            let r_u32: Vec<u32> = r.into_iter().map(|v| v as u32).collect();
-            let g_u32: Vec<u32> = g.into_iter().map(|v| v as u32).collect();
-            let b_u32: Vec<u32> = b.into_iter().map(|v| v as u32).collect();
-            columns.push(Column::new(PlSmallStr::from_str(rn), r_u32));
-            columns.push(Column::new(PlSmallStr::from_str(gn), g_u32));
-            columns.push(Column::new(PlSmallStr::from_str(bn), b_u32));
+        if let (Some(r_attr), Some(g_attr), Some(b_attr)) = (
+            pc.get_attribute("red"),
+            pc.get_attribute("green"),
+            pc.get_attribute("blue"),
+        ) {
+            if let (Some(r), Some(g), Some(b)) = (r_attr.as_u8(), g_attr.as_u8(), b_attr.as_u8()) {
+                let r_u32: Vec<u32> = r.iter().map(|&v| v as u32).collect();
+                let g_u32: Vec<u32> = g.iter().map(|&v| v as u32).collect();
+                let b_u32: Vec<u32> = b.iter().map(|&v| v as u32).collect();
+                columns.push(Column::new(PlSmallStr::from_str(rn), r_u32));
+                columns.push(Column::new(PlSmallStr::from_str(gn), g_u32));
+                columns.push(Column::new(PlSmallStr::from_str(bn), b_u32));
+            }
         }
     }
 
-    // let columns: Vec<Column> = series.into_iter().map(|s| s.into()).collect();
     DataFrame::new(columns).map_err(|e| PointCloudError::ParseError(e.to_string()))
 }
 
 fn get_f32_col(df: &DataFrame, name: &str) -> Result<Vec<f32>> {
     let series = df
         .column(name)
-        .map_err(|_| PointCloudError::ParseError(format!("缺少列: {}", name)))?;
+        .map_err(|_| PointCloudError::ParseError(format!("missing column: {}", name)))?;
     if let Ok(col) = series.f32() {
         return Ok(col.into_no_null_iter().collect());
     }
@@ -213,13 +216,16 @@ fn get_f32_col(df: &DataFrame, name: &str) -> Result<Vec<f32>> {
     if let Ok(col) = series.i32() {
         return Ok(col.into_no_null_iter().map(|v| v as f32).collect());
     }
-    Err(PointCloudError::ParseError(format!("列{}类型不支持", name)))
+    Err(PointCloudError::ParseError(format!(
+        "unsupported column type: {}",
+        name
+    )))
 }
 
 fn get_u8_col(df: &DataFrame, name: &str) -> Result<Vec<u8>> {
     let series = df
         .column(name)
-        .map_err(|_| PointCloudError::ParseError(format!("缺少列: {}", name)))?;
+        .map_err(|_| PointCloudError::ParseError(format!("missing column: {}", name)))?;
     if let Ok(col) = series.u8() {
         return Ok(col.into_no_null_iter().collect());
     }
@@ -238,5 +244,8 @@ fn get_u8_col(df: &DataFrame, name: &str) -> Result<Vec<u8>> {
             .map(|v| v.clamp(0, 255) as u8)
             .collect());
     }
-    Err(PointCloudError::ParseError(format!("列{}类型不支持", name)))
+    Err(PointCloudError::ParseError(format!(
+        "unsupported column type: {}",
+        name
+    )))
 }
