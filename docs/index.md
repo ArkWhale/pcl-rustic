@@ -53,7 +53,7 @@
 === "从源码"
 
     ```bash
-    git clone https://github.com/YOUR_USERNAME/pcl-rustic.git
+    git clone https://github.com/ArkWhale/pcl-rustic.git
     cd pcl-rustic
     uv build
     ```
@@ -75,7 +75,7 @@ pc.set_intensity(intensity)
 # 体素下采样
 pc_downsampled = pc.voxel_downsample(
     voxel_size=0.15,
-    strategy=DownsampleStrategy.CENTROID
+    strategy=DownsampleStrategy.NEAREST_TO_CENTROID
 )
 
 print(f"原始点数: {pc.point_count():,}")
@@ -118,9 +118,9 @@ print(f"下采样后: {pc_downsampled.point_count():,}")
 
 ## 🤝 社区
 
-- [GitHub 仓库](https://github.com/YOUR_USERNAME/pcl-rustic)
-- [问题反馈](https://github.com/YOUR_USERNAME/pcl-rustic/issues)
-- [Pull Requests](https://github.com/YOUR_USERNAME/pcl-rustic/pulls)
+- [GitHub 仓库](https://github.com/ArkWhale/pcl-rustic)
+- [问题反馈](https://github.com/ArkWhale/pcl-rustic/issues)
+- [Pull Requests](https://github.com/ArkWhale/pcl-rustic/pulls)
 
 ## 📄 许可证
 

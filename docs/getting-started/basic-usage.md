@@ -67,22 +67,22 @@ if pc.has_intensity():
 ```python
 from pcl_rustic import DownsampleStrategy
 
-# 使用质心策略
+# 选择最接近体素质心的原始点
 pc_down = pc.voxel_downsample(
     voxel_size=0.15,
-    strategy=DownsampleStrategy.CENTROID
+    strategy=DownsampleStrategy.NEAREST_TO_CENTROID
 )
 
-# 使用强度加权质心（需要强度属性）
+# 输出体素平均点
 pc_down = pc.voxel_downsample(
     voxel_size=0.15,
-    strategy=DownsampleStrategy.INTENSITY_CENTROID
+    strategy=DownsampleStrategy.AVERAGE
 )
 
 # 使用随机采样
 pc_down = pc.voxel_downsample(
     voxel_size=0.15,
-    strategy=DownsampleStrategy.RANDOM
+    strategy=DownsampleStrategy.RANDOM_SEEDED
 )
 
 print(f"原始: {pc.point_count()}, 下采样: {pc_down.point_count()}")
@@ -92,9 +92,9 @@ print(f"原始: {pc.point_count()}, 下采样: {pc_down.point_count()}")
 
 | 策略 | 描述 | 性能 | 适用场景 |
 |------|------|------|----------|
-| `CENTROID` | 体素内所有点的质心 | ⭐⭐⭐ | 通用，保持几何形状 |
-| `INTENSITY_CENTROID` | 强度加权质心 | ⭐⭐ | 保留高强度特征 |
-| `RANDOM` | 随机选择一个点 | ⭐⭐⭐⭐⭐ | 快速预览 |
+| `NEAREST_TO_CENTROID` | 选择最接近体素质心的原始点 | ⭐⭐⭐ | 通用，保持原始点属性 |
+| `AVERAGE` | 输出体素内平均点，整数属性取众数 | ⭐⭐ | 需要 Open3D 风格平均语义 |
+| `RANDOM_SEEDED` | 按 seed 随机选择一个点 | ⭐⭐⭐⭐⭐ | 可复现快速预览 |
 
 ## 坐标变换
 

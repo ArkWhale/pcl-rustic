@@ -516,6 +516,26 @@ impl PyPointCloud {
         })
     }
 
+    #[pyo3(signature = (device))]
+    fn to(&self, device: &str) -> PyResult<Self> {
+        let device = match device {
+            "cpu" => crate::utils::tensor::cpu_device(),
+            "gpu" => crate::utils::tensor::gpu_device(),
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "device must be 'cpu' or 'gpu'",
+                ))
+            }
+        };
+        Ok(PyPointCloud {
+            inner: self.inner.to_device(device),
+        })
+    }
+
+    fn device(&self) -> String {
+        self.inner.device_name()
+    }
+
     // === Concatenation ===
 
     #[staticmethod]

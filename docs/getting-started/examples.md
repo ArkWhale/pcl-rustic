@@ -2,6 +2,13 @@
 
 本页面提供完整的使用示例，展示如何在实际场景中使用 `pcl-rustic`。
 
+## RFC 工作流示例
+
+仓库中包含两个端到端脚本：
+
+- `examples/split_grid_downsample_concat.py`：按 AABB 网格切片，每个格子使用不同体素大小下采样，再 `PointCloud.concatenate(..., policy="union")` 合并。
+- `examples/classification_aware_downsample.py`：按 LAS classification 分组，按类别设置体素大小，可选异常点清理后合并。
+
 ## 基础示例
 
 ### 创建和可视化点云
@@ -44,7 +51,7 @@ voxel_sizes = [0.5, 1.0, 2.0]
 for voxel_size in voxel_sizes:
     pc_down = pc.voxel_downsample(
         voxel_size=voxel_size,
-        strategy=DownsampleStrategy.CENTROID
+        strategy=DownsampleStrategy.NEAREST_TO_CENTROID
     )
     reduction = (1 - pc_down.point_count() / pc.point_count()) * 100
     print(f"体素 {voxel_size}m: {pc_down.point_count():,} 点 ({reduction:.1f}% 减少)")
@@ -73,7 +80,7 @@ for laz_file in input_dir.glob("*.laz"):
     # 下采样
     pc_down = pc.voxel_downsample(
         voxel_size=0.1,
-        strategy=DownsampleStrategy.INTENSITY_CENTROID
+        strategy=DownsampleStrategy.AVERAGE
     )
 
     # 保存
@@ -257,7 +264,7 @@ def benchmark_downsample(pc: PointCloud, voxel_sizes: list[float]):
 
         pc_down = pc.voxel_downsample(
             voxel_size=voxel_size,
-            strategy=DownsampleStrategy.CENTROID
+            strategy=DownsampleStrategy.NEAREST_TO_CENTROID
         )
 
         elapsed = time.time() - start_time

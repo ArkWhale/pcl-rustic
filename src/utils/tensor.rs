@@ -9,6 +9,7 @@ use burn::tensor::{Tensor, TensorData};
 
 // Router backend: automatically selects GPU (Wgpu) or CPU (NdArray) at runtime
 pub type Backend = Router<(Wgpu, NdArray)>;
+pub type BackendDevice = <Backend as BackendTrait>::Device;
 
 /// Default device with automatic GPU->CPU fallback
 ///
@@ -16,7 +17,7 @@ pub type Backend = Router<(Wgpu, NdArray)>;
 /// 1. Router backend 包含两个后端：Wgpu (GPU) 和 NdArray (CPU)
 /// 2. MultiDevice::B1 对应第一个后端 (Wgpu)，B2 对应第二个 (NdArray)
 /// 3. 运行时尝试初始化 GPU，失败则自动降级到 CPU
-pub fn default_device() -> <Backend as BackendTrait>::Device {
+pub fn default_device() -> BackendDevice {
     use burn::backend::router::duo::MultiDevice;
 
     // 尝试创建 GPU 设备，如果失败则降级到 CPU
@@ -36,14 +37,14 @@ pub fn default_device() -> <Backend as BackendTrait>::Device {
 
 /// Get a GPU device if available
 #[allow(dead_code)]
-pub fn gpu_device() -> <Backend as BackendTrait>::Device {
+pub fn gpu_device() -> BackendDevice {
     use burn::backend::router::duo::MultiDevice;
     MultiDevice::B1(WgpuDevice::default())
 }
 
 /// Get a CPU device
 #[allow(dead_code)]
-pub fn cpu_device() -> <Backend as BackendTrait>::Device {
+pub fn cpu_device() -> BackendDevice {
     use burn::backend::router::duo::MultiDevice;
     MultiDevice::B2(NdArrayDevice::Cpu)
 }

@@ -31,7 +31,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ### 2. 克隆仓库
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/pcl-rustic.git
+git clone https://github.com/ArkWhale/pcl-rustic.git
 cd pcl-rustic
 ```
 

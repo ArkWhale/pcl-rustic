@@ -65,14 +65,14 @@
 
 | 策略 | 输出点数 | 耗时 (s) | 相对性能 |
 |------|---------|---------|---------|
-| RANDOM | 7,870,113 | 5.82 | ⭐⭐⭐⭐⭐ |
-| CENTROID | 7,870,113 | 7.13 | ⭐⭐⭐⭐ |
-| INTENSITY_CENTROID | 7,870,113 | 8.45 | ⭐⭐⭐ |
+| RANDOM_SEEDED | 7,870,113 | 5.82 | ⭐⭐⭐⭐⭐ |
+| NEAREST_TO_CENTROID | 7,870,113 | 7.13 | ⭐⭐⭐⭐ |
+| AVERAGE | 7,870,113 | 8.45 | ⭐⭐⭐ |
 
 **结论**：
-- `RANDOM` 最快（比 `CENTROID` 快 18%）
-- `CENTROID` 提供最好的几何精度
-- `INTENSITY_CENTROID` 适合保留高强度特征
+- `RANDOM_SEEDED` 最快且可复现
+- `NEAREST_TO_CENTROID` 保留原始点
+- `AVERAGE` 提供平均体素语义
 
 ## 文件 I/O 性能
 
@@ -261,7 +261,7 @@ CI 流水线中的性能基准测试会自动运行，结果可在 GitHub Action
 - **平台**: macOS, Linux, Windows
 - **保留期**: 30 天
 
-查看最新结果：[GitHub Actions](https://github.com/YOUR_USERNAME/pcl-rustic/actions/workflows/benchmark.yml)
+查看最新结果：[GitHub Actions](https://github.com/ArkWhale/pcl-rustic/actions/workflows/benchmark.yml)
 
 ## 下一步
 

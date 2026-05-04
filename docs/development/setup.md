@@ -46,7 +46,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ## 克隆仓库
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/pcl-rustic.git
+git clone https://github.com/ArkWhale/pcl-rustic.git
 cd pcl-rustic
 ```
 

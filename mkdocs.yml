@@ -1,9 +1,9 @@
 site_name: PCL Rustic
-site_url: https://YOUR_USERNAME.github.io/pcl-rustic/
+site_url: https://ArkWhale.github.io/pcl-rustic/
 site_description: 高性能 Python 点云处理库 - 基于 Rust + Burn 张量框架
 site_author: liuzhen19
 
-repo_url: https://github.com/YOUR_USERNAME/pcl-rustic
+repo_url: https://github.com/ArkWhale/pcl-rustic
 repo_name: pcl-rustic
 edit_uri: edit/main/docs/
 
@@ -92,7 +92,19 @@ nav:
     - PointCloud: api/pointcloud.md
     - 下采样: api/downsample.md
     - 坐标变换: api/transform.md
+    - 异常点过滤: api/outlier.md
+    - 配准: api/registration.md
     - 文件 I/O: api/io.md
+  - RFC:
+    - 概览: plans/README.md
+    - RFC-0001: plans/rfc-0001-2026-04-30-pcl-rustic-roadmap.md
+    - RFC-0002: plans/rfc-0002-2026-04-30-api-reset-and-typed-attributes.md
+    - RFC-0003: plans/rfc-0003-2026-04-30-coord-ops-and-selection.md
+    - RFC-0004: plans/rfc-0004-2026-04-30-gpu-hot-path.md
+    - RFC-0005: plans/rfc-0005-2026-04-30-knn-and-normals.md
+    - RFC-0006: plans/rfc-0006-2026-04-30-outlier-removal.md
+    - RFC-0007: plans/rfc-0007-2026-04-30-icp-gicp-registration.md
+    - RFC-0008: plans/rfc-0008-2026-05-04-kdtree-fallback-and-gicp-staging.md
   - 性能:
     - 基准测试: performance/benchmarks.md
     - 优化建议: performance/optimization.md
@@ -103,7 +115,7 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/YOUR_USERNAME/pcl-rustic
+      link: https://github.com/ArkWhale/pcl-rustic
   analytics:
     provider: google
     property: !ENV GOOGLE_ANALYTICS_KEY

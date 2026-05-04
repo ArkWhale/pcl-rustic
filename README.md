@@ -1,6 +1,6 @@
 # PCL Rustic - 高性能 Python 点云运算库
 
-[![CI](https://github.com/YOUR_USERNAME/pcl-rustic/workflows/CI/badge.svg)](https://github.com/YOUR_USERNAME/pcl-rustic/actions/workflows/test.yml)
+[![CI](https://github.com/ArkWhale/pcl-rustic/workflows/CI/badge.svg)](https://github.com/ArkWhale/pcl-rustic/actions/workflows/test.yml)
 [![PyPI](https://img.shields.io/pypi/v/pcl-rustic?label=PyPI)](https://pypi.org/project/pcl-rustic/)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue)](https://www.python.org/)
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange)](https://www.rust-lang.org/)
@@ -14,7 +14,7 @@
 - 🔗 **零拷贝互通**：与 NumPy 数组无缝转换，支持多种 dtype
 - 📦 **多格式 I/O**：LAZ/LAS/Parquet/CSV 格式读写
 - 🎯 **类型安全**：完整的类型注解和 `.pyi` 存根文件
-- 🧩 **模块化设计**：清晰的 Trait 抽象，易于扩展
+- 🧩 **模块化设计**：typed attributes、选择、邻域、异常点过滤和配准分层实现
 - 📊 **性能优异**：10M 点云体素下采样 ~7s，吞吐量 1.3-1.5M pts/s
 
 ## 📦 安装
@@ -37,7 +37,7 @@ pip install pcl-rustic
 
 ```bash
 # 克隆仓库
-git clone https://github.com/YOUR_USERNAME/pcl-rustic.git
+git clone https://github.com/ArkWhale/pcl-rustic.git
 cd pcl-rustic
 
 # 使用 uv 构建（推荐）
@@ -62,7 +62,7 @@ maturin develop --release
 import numpy as np
 from pcl_rustic import PointCloud, DownsampleStrategy
 
-# 使用 NumPy 数组创建点云（dtype=float32）
+# 使用 NumPy 数组创建点云（XYZ 会存储为 float32）
 xyz = np.random.randn(10000, 3).astype(np.float32) * 100
 pc = PointCloud.from_xyz(xyz)
 
@@ -73,7 +73,7 @@ pc.set_intensity(intensity)
 # 体素下采样
 pc_downsampled = pc.voxel_downsample(
     voxel_size=0.15,
-    strategy=DownsampleStrategy.CENTROID
+    strategy=DownsampleStrategy.NEAREST_TO_CENTROID
 )
 
 print(f"原始点数: {pc.point_count():,}")
@@ -130,13 +130,14 @@ pc_transformed = pc.transform(matrix)
 # 体素下采样
 pc_down = pc.voxel_downsample(
     voxel_size=0.06,  # 体素大小
-    strategy=DownsampleStrategy.CENTROID  # 或 RANDOM
+    strategy=DownsampleStrategy.NEAREST_TO_CENTROID
 )
 ```
 
 **采样策略**：
-- `DownsampleStrategy.RANDOM`：随机选择体素内的点
-- `DownsampleStrategy.CENTROID`：选择最接近体素中心的点
+- `DownsampleStrategy.RANDOM_SEEDED`：按 seed 随机选择体素内的点
+- `DownsampleStrategy.NEAREST_TO_CENTROID`：选择最接近体素中心的点
+- `DownsampleStrategy.AVERAGE`：输出体素内 XYZ 和属性的聚合值
 
 ### 文件 I/O
 
@@ -155,28 +156,17 @@ PointCloud.delete_file("output.las")
 ```
 src/
 ├── lib.rs              # PyO3 Python 绑定入口
-├── traits/             # Trait 抽象层
-│   ├── point_cloud.rs  # 点云核心 Trait
-│   ├── io.rs           # I/O 接口 Trait
-│   ├── downsample.rs   # 下采样 Trait
-│   └── transform.rs    # 坐标变换 Trait
-├── point_cloud/        # 点云核心模块
-│   ├── core.rs         # HighPerformancePointCloud 结构体
-│   └── voxel.rs        # 体素下采样实现
-├── io/                 # 多格式 I/O
-│   ├── las_laz.rs      # LAS/LAZ 格式
-│   ├── parquet.rs      # Parquet 格式
-│   └── csv.rs          # CSV 格式
-├── interop/            # Python 互通
-│   └── numpy.rs        # NumPy 数组转换
-└── utils/              # 工具模块
-    ├── error.rs        # 错误处理
-    └── tensor.rs       # Burn 张量工具
+├── point_cloud/        # 核心、typed attributes、选择、变换、下采样、异常点
+├── neighbors/          # KD-tree、octree、法向量和协方差估计
+├── registration.rs     # ICP/GICP API
+├── io/                 # LAS/LAZ 和表格 I/O
+├── interop/            # NumPy 边界
+└── utils/              # 错误和 Burn 张量工具
 ```
 
 **设计原则**：
 - ✅ 使用 NumPy 数组作为 Python 接口（零拷贝读取）
-- ✅ 仅支持 `float32` dtype，用户需要预先转换
+- ✅ XYZ 存储为 `float32`，属性保留原始 dtype
 - ✅ Getter 方法返回 NumPy 数组，需要 `Python` GIL 上下文
 - ✅ 所有数据批量操作，不支持单点访问
 
@@ -305,7 +295,7 @@ just docs-build
 just docs-deploy
 ```
 
-访问 [https://YOUR_USERNAME.github.io/pcl-rustic](https://YOUR_USERNAME.github.io/pcl-rustic) 查看在线文档。
+访问 [https://ArkWhale.github.io/pcl-rustic](https://ArkWhale.github.io/pcl-rustic) 查看在线文档。
 
 ## 🔄 CI/CD
 
@@ -385,7 +375,7 @@ graph LR
      - 构建文档：`mkdocs build --clean --strict`
      - 部署到 GitHub Pages
    - **权限**：`pages: write`、`id-token: write`
-   - **URL**：https://YOUR_USERNAME.github.io/pcl-rustic
+   - **URL**：https://ArkWhale.github.io/pcl-rustic
    - **手动触发**：✅ 支持 (`workflow_dispatch`)
    - **耗时**：~2-3 分钟
 
@@ -422,8 +412,8 @@ git push origin vX.Y.Z
 
 ### 查看构建状态
 
-- **GitHub Actions**: [github.com/YOUR_USERNAME/pcl-rustic/actions](https://github.com/YOUR_USERNAME/pcl-rustic/actions)
-- **在线文档**: [https://YOUR_USERNAME.github.io/pcl-rustic](https://YOUR_USERNAME.github.io/pcl-rustic)
+- **GitHub Actions**: [github.com/ArkWhale/pcl-rustic/actions](https://github.com/ArkWhale/pcl-rustic/actions)
+- **在线文档**: [https://ArkWhale.github.io/pcl-rustic](https://ArkWhale.github.io/pcl-rustic)
 - **PyPI**: [pypi.org/project/pcl-rustic](https://pypi.org/project/pcl-rustic)
 
 ### 环境变量和 Secrets
@@ -511,7 +501,7 @@ pc = PointCloud.from_xyz(xyz)
 - 添加单元测试覆盖新功能
 - 更新相关文档
 
-查看 [开发指南](https://YOUR_USERNAME.github.io/pcl-rustic/development/setup/) 了解更多详情。
+查看 [开发指南](https://ArkWhale.github.io/pcl-rustic/development/setup/) 了解更多详情。
 
 ## 📄 许可证
 

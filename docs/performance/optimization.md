@@ -84,16 +84,16 @@ pc_down = pc.voxel_downsample(voxel_size)
 
 | 场景 | 策略 | 原因 |
 |------|------|------|
-| 可视化 | RANDOM | 速度最快，视觉效果足够 |
-| 配准/重建 | CENTROID | 保持几何精度 |
-| 特征提取 | INTENSITY_CENTROID | 保留高强度特征点 |
+| 可视化 | `RANDOM_SEEDED` | 速度快且可复现 |
+| 配准/重建 | `NEAREST_TO_CENTROID` | 保留真实点坐标和属性 |
+| 聚合分析 | `AVERAGE` | 输出体素均值，整数属性取众数 |
 
 ```python
 # 快速预览
-pc_preview = pc.voxel_downsample(0.2, DownsampleStrategy.RANDOM)
+pc_preview = pc.voxel_downsample(0.2, DownsampleStrategy.RANDOM_SEEDED)
 
 # 精确处理
-pc_precise = pc.voxel_downsample(0.1, DownsampleStrategy.CENTROID)
+pc_precise = pc.voxel_downsample(0.1, DownsampleStrategy.NEAREST_TO_CENTROID)
 ```
 
 ## 内存管理

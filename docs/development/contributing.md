@@ -13,7 +13,7 @@
 
 ### 报告Bug
 
-在[GitHub Issues](https://github.com/YOUR_USERNAME/pcl-rustic/issues)中创建bug报告，请包含：
+在[GitHub Issues](https://github.com/ArkWhale/pcl-rustic/issues)中创建bug报告，请包含：
 
 - **描述**: 清晰简洁的问题描述
 - **复现步骤**: 详细的复现步骤
@@ -52,7 +52,7 @@
 
 ### 提议新功能
 
-在[GitHub Discussions](https://github.com/YOUR_USERNAME/pcl-rustic/discussions)中讨论新功能：
+在[GitHub Discussions](https://github.com/ArkWhale/pcl-rustic/discussions)中讨论新功能：
 
 - 描述功能的用途
 - 解释为什么需要这个功能
@@ -68,7 +68,7 @@
 2. **克隆你的fork**
 
    ```bash
-   git clone https://github.com/YOUR_USERNAME/pcl-rustic.git
+   git clone https://github.com/ArkWhale/pcl-rustic.git
    cd pcl-rustic
    ```
 
@@ -329,9 +329,9 @@ cargo flamegraph --example benchmark
 
 如果您遇到问题或有疑问：
 
-1. 查看[文档](https://YOUR_USERNAME.github.io/pcl-rustic)
-2. 搜索[现有Issues](https://github.com/YOUR_USERNAME/pcl-rustic/issues)
-3. 在[Discussions](https://github.com/YOUR_USERNAME/pcl-rustic/discussions)中提问
+1. 查看[文档](https://ArkWhale.github.io/pcl-rustic)
+2. 搜索[现有Issues](https://github.com/ArkWhale/pcl-rustic/issues)
+3. 在[Discussions](https://github.com/ArkWhale/pcl-rustic/discussions)中提问
 4. 联系维护者：liuzhen19@xiaomi.com
 
 ## 致谢

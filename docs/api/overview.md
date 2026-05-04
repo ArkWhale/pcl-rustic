@@ -11,17 +11,18 @@ pcl-rustic 提供以下主要模块和类：
 [PointCloud](pointcloud.md) 是核心类，提供点云的创建、属性管理和基本操作功能。
 
 **主要功能**：
-- 从 NumPy 数组创建点云
-- 属性管理（强度、RGB 颜色等）
-- 获取点云统计信息
+- 从 NumPy 数组创建点云，XYZ 支持 `float32`、`float64`、`int32`、`int64`
+- 保留 LAS 语义的 typed attributes
+- 选择、拼接、邻域查询、法向量、异常点过滤
 
 ### 下采样 (Downsample)
 
 [下采样模块](downsample.md) 提供体素下采样功能，支持多种降采样策略。
 
 **主要功能**：
-- 体素下采样
-- 多种降采样策略（质心、随机、强度加权质心）
+- `RANDOM_SEEDED`
+- `NEAREST_TO_CENTROID`
+- `AVERAGE`
 
 ### 坐标变换 (Transform)
 
@@ -41,10 +42,16 @@ pcl-rustic 提供以下主要模块和类：
 - CSV 文件读写
 - Parquet 文件读写（规划中）
 
+### 配准与清洗
+
+[异常点过滤](outlier.md) 和 [配准](registration.md) 提供 SOR/ROR、
+Point-to-Point ICP、Point-to-Plane ICP 和 GICP 入口。
+
 ## 数据类型要求
 
-!!! warning "重要"
-    所有输入的 NumPy 数组必须是 **`dtype=float32`**。如果数据是其他类型，需要使用 `.astype(np.float32)` 转换。
+!!! note "数据类型"
+    XYZ 输入会被存储为 `float32`。属性会保留原始 NumPy dtype，支持
+    `float32`、`float64`、`uint8`、`uint16`、`uint32`、`int32`、`int64` 和 `bool`。
 
 ## 快速索引
 
@@ -53,6 +60,9 @@ pcl-rustic 提供以下主要模块和类：
 | `PointCloud` | 核心点云类 | [详情](pointcloud.md) |
 | `PointCloud.from_xyz()` | 从 XYZ 数组创建 | [详情](pointcloud.md) |
 | `voxel_downsample()` | 体素下采样 | [详情](downsample.md) |
+| `knn()` / `radius_search()` | 邻域查询 | [详情](pointcloud.md) |
+| `remove_statistical_outlier()` | 统计异常点过滤 | [详情](outlier.md) |
+| `registration.icp()` | ICP 配准 | [详情](registration.md) |
 | `transform()` | 矩阵变换 | [详情](transform.md) |
 | `rigid_transform()` | 刚体变换 | [详情](transform.md) |
 | `from_las()` | 读取 LAZ/LAS 文件 | [详情](io.md) |
@@ -75,7 +85,7 @@ intensity = np.random.rand(10000).astype(np.float32) * 255
 pc.set_intensity(intensity)
 
 # 3. 下采样
-pc_down = pc.voxel_downsample(0.15, DownsampleStrategy.CENTROID)
+pc_down = pc.voxel_downsample(0.15, DownsampleStrategy.NEAREST_TO_CENTROID)
 
 # 4. 变换
 translation = np.array([10.0, 0.0, 0.0], dtype=np.float32)

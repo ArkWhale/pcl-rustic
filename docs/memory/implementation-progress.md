@@ -1,107 +1,135 @@
 # Implementation Progress — RFC 0002-0007
 
-## Current Status: M1 (RFC-0002) COMPLETE (Rust side), Python build pending
+## Current Status: RFC-0002/0003/0005/0006/0007 substantially implemented
 
-### What's Done
+Last updated: 2026-05-04.
 
-**M1 (RFC-0002): API Reset & Typed Attributes — RUST COMPLETE**
+### Commits Made This Session
 
-All Rust code compiles and passes tests. Waiting for `uv` upgrade to build the Python extension.
+1. `59d5d5a Implement neighbor outlier and registration core`
+   - Added KD-tree wrapper, octree, normal/covariance estimation, SOR/ROR, and registration core.
+2. `2509bef Expose RFC APIs to Python tests and CI`
+   - Exposed Python APIs, updated stubs/exports, added pytest coverage, and changed CI workflows to run `just ci`.
 
-Key changes made:
+### Verified
 
-1. **`src/point_cloud/attribute_value.rs`** (NEW)
-   - `AttributeValue` enum with variants: F32, F64, U8, U16, U32, I32, I64, Bool
-   - `AttrDType` enum for runtime type tagging
-   - Methods: `len()`, `dtype()`, `gather()`, `select_mask()`, `concatenate()`, `zeros()`, `to_f32_vec()`, `memory_usage()`
-   - Accessors: `as_f32()`, `as_u8()`, etc.
+- `cargo test` passes: 16/16 Rust unit tests.
+- `uv run maturin develop` succeeded after cache permission escalation.
+- `uv run pytest tests/test_point_cloud.py -v` passes: 40/40 Python integration tests.
 
-2. **`src/point_cloud/core.rs`** (REWRITTEN)
-   - `HighPerformancePointCloud` now has: `xyz: Tensor2` + `attributes: HashMap<String, AttributeValue>`
-   - Removed dedicated `intensity`, `rgb_r/g/b` fields — all stored as named attributes
-   - Reserved attribute names: `intensity` (f32), `red/green/blue` (u8), `classification` (u8), `return_number` (u8), `number_of_returns` (u8), `gps_time` (f64)
-   - New constructors: `from_xyz_vec(Vec<[f32;3]>)`, `from_tensor_xyz(Tensor2)`
-   - Selection primitives: `select_mask(&[bool])`, `select_indices(&[usize])`
+Note: local shell does not have `just` installed, so `just test` / `just ci` could not be invoked directly. Equivalent steps were run manually. CI installs `just` before invoking `just ci`.
 
-3. **`src/point_cloud/voxel.rs`** (REWRITTEN)
-   - New `DownsampleStrategy` enum: `RandomSeeded { seed }`, `NearestToCentroid`, `Average`
-   - `RandomSeeded` uses `ChaCha8Rng` for deterministic sampling (sorted voxel keys for reproducibility)
-   - `Average` computes mean for f32/f64, mode for integer types, majority vote for bool
-   - All strategies use `select_indices` internally (clean attribute propagation)
+## Implemented By RFC
 
-4. **`src/point_cloud/transform.rs`** (REWRITTEN)
-   - Direct impl methods: `transform(&[[f32;4];4])`, `transform_3x3(&[[f32;3];3])`
-   - New: `translate([f32;3])`, `scale(f32, center)`, `rotate(&[[f32;3];3], center)`
-   - `rigid_transform(&[[f32;3];3], [f32;3])` — rotation + translation
+### RFC-0002 — API Reset & Typed Attributes
 
-5. **`src/point_cloud/selection.rs`** (NEW)
-   - Feature selectors: `select_by_classification(&[u8])`, `select_intensity_range(lo, hi)`, `select_return_number(n)`, `select_elevation_range(lo, hi)`
-   - Spatial: `crop_aabb(min, max)`, `aabb() -> (min, max)`
-   - `concatenate(&[&Self], ConcatPolicy)` with Strict/Union/Intersection policies
+- `AttributeValue` supports `F32`, `F64`, `U8`, `U16`, `U32`, `I32`, `I64`, `Bool`.
+- Added `F32x6` for RFC-0007 packed covariance attribute storage.
+- XYZ accepts `float32`, `float64`, `int32`, `int64` NumPy inputs and stores `float32`.
+- Attributes preserve dtype through `set_attribute()` / `get_attribute()`.
+- Voxel strategies exposed as:
+  - `RANDOM_SEEDED`
+  - `NEAREST_TO_CENTROID`
+  - `AVERAGE`
+- Legacy aliases `RANDOM` and `CENTROID` remain.
+- Python `.pyi` and `__init__.py` updated for current API.
 
-6. **`src/interop/numpy.rs`** (REWRITTEN)
-   - `from_xyz_array` accepts f32, f64, i32, i64 numpy arrays (autocast to f32)
-   - `read_attribute_from_pyany` detects and preserves: f32, f64, u8, u16, u32, i32, i64, bool
-   - `attribute_to_numpy` outputs correct dtype
-   - `from_numpy(dict)` reads all keys as typed attributes
+### RFC-0003 — Coordinate Ops & Selection
 
-7. **`src/io/las_laz.rs`** (REWRITTEN)
-   - Reads LAS fields as typed attributes: classification (u8), return_number (u8), gps_time (f64), etc.
-   - Writes with full attribute fidelity
-   - Supports format 0-3 selection based on available attributes
+- Implemented and exposed:
+  - `select(mask)`
+  - `select_indices(indices)`
+  - `select_by_classification(codes)`
+  - `select_return_number(n)`
+  - `select_intensity_range(lo, hi)`
+  - `select_elevation_range(lo, hi)`
+  - `crop_aabb(min, max)`
+  - `aabb()`
+  - `PointCloud.concatenate(clouds, policy)`
+  - `translate`, `scale`, `rotate`, `rigid_transform`, `transform`
+- Added examples:
+  - `examples/split_grid_downsample_concat.py`
+  - `examples/classification_aware_downsample.py`
 
-8. **`src/io/table.rs`** (REWRITTEN)
-   - Updated to use new AttributeValue API (no old trait references)
+### RFC-0004 — GPU Hot Path
 
-9. **`src/lib.rs`** (REWRITTEN)
-   - Complete Python bindings for: PointCloud, DownsampleStrategy
-   - New strategy constants: RANDOM_SEEDED=0, NEAREST_TO_CENTROID=1, AVERAGE=2 (old RANDOM/CENTROID kept as aliases)
-   - Selection methods exposed: `select(mask)`, `select_indices`, `select_by_classification`, `select_intensity_range`
-   - `concatenate(clouds, policy)` as static method
-   - Transform methods: `translate`, `scale`, `rotate`
-   - `voxel_downsample(voxel_size, strategy, seed=None)`
+- Added device hooks:
+  - Rust `HighPerformancePointCloud::to_device(...)`
+  - Python `pc.to("cpu" | "gpu")`
+  - Python `pc.device()`
+- Transform path continues to use Burn tensors.
+- Full RFC-0004 tensor-native voxel binning / segment-reduce rewrite is **not complete**. Current voxel, selection, and neighbor algorithms remain CPU/reference implementations for correctness.
 
-10. **Removed old code:**
-    - `src/traits/` directory (DownsampleStrategy trait, PointCloudCore trait, etc.)
-    - `src/utils/reflect.rs` (old voxel grouping)
-    - `src/point_cloud/attributes.rs` (merged into core)
+### RFC-0005 — KD-tree, Octree, Normals
 
-11. **`Cargo.toml`** updated:
-    - Added: `rand = "0.8"`, `rand_chacha = "0.3"`, `kiddo = "4"`, `nalgebra = "0.33"`, `once_cell = "1"`
+- Added `src/neighbors/`:
+  - `kdtree.rs`
+  - `octree.rs`
+  - `normals.rs`
+- Python APIs:
+  - `pc.knn(query, k) -> (indices, distances)`
+  - `pc.radius_search(query, radius) -> list[np.ndarray]`
+  - `pc.octree(max_depth)`
+  - `octree.range_search(center, radius)`
+  - `octree.voxel_centers()`
+  - `pc.estimate_normals(NormalSearch.knn/radius/hybrid(...))`
+- KD-tree uses `kiddo` when geometry is suitable.
+- Degenerate geometry fallback is documented in RFC-0008.
 
-12. **`pyproject.toml`** fixed:
-    - `readme` now points to `README.md` (was `ai_doc/README.md`)
+### RFC-0006 — Outlier Removal
 
-### Rust Tests (6/6 passing)
-- `test_translate`
-- `test_scale`
-- `test_rigid_transform`
-- `test_voxel_downsample_nearest_to_centroid`
-- `test_voxel_downsample_random_seeded_deterministic`
-- `test_voxel_downsample_average`
+- Implemented:
+  - `remove_statistical_outlier(nb_neighbors, std_ratio) -> (cloud, kept_mask)`
+  - `remove_radius_outlier(nb_points, radius) -> (cloud, kept_mask)`
+- Rust and Python tests cover synthetic outliers and mask propagation.
 
----
+### RFC-0007 — ICP/GICP Registration
 
-## What's Next (after uv upgrade)
+- Added `src/registration.rs`.
+- Python submodule `pcl_rustic.registration` exposes:
+  - `ICPConvergenceCriteria`
+  - `TransformationEstimation.point_to_point()`
+  - `TransformationEstimation.point_to_plane()`
+  - `TransformationEstimation.generalized(epsilon=1e-3)`
+  - `RegistrationResult`
+  - `registration.icp(...)`
+  - `registration.evaluate(...)`
+- Point-to-point ICP is implemented and tested.
+- Point-to-plane validates required target normals.
+- GICP validates required source/target packed covariance attributes.
+- `estimate_covariances(knn)` writes packed `covariance` as `float32[N, 6]`.
+- Full covariance-weighted GICP update is staged; see RFC-0008.
 
-1. **Build Python extension** with `maturin develop --uv`
-2. **Update Python tests** (`tests/test_point_cloud.py`) for new API
-3. **Update `.pyi` stubs** and `__init__.py`
-4. **Commit M1**
-5. **Proceed to M4** (RFC-0005: KD-tree, normals) — M2 selection is already mostly done in M1
-6. **M5** (RFC-0006: Outlier removal)
-7. **M6** (RFC-0007: ICP/GICP)
-8. **M3** (RFC-0004: GPU hot-path) — partial, depends on GPU hardware
+## Docs Updated
 
----
+- Added:
+  - `docs/api/outlier.md`
+  - `docs/api/registration.md`
+  - `docs/plans/rfc-0008-2026-05-04-kdtree-fallback-and-gicp-staging.md`
+- Rewrote:
+  - `docs/api/pointcloud.md`
+  - `docs/api/downsample.md`
+- Updated:
+  - `docs/api/overview.md`
+  - `docs/getting-started/examples.md`
+  - `mkdocs.yml` nav includes RFCs and new API pages.
+- Replaced most stale `YOUR_USERNAME` and deprecated downsample strategy references in docs/README.
+
+## Important Open Work
+
+1. Finish RFC-0004 tensor-native voxel binning and GPU benchmark matrix.
+2. Replace staged GICP update with covariance-weighted plane-to-plane solve.
+3. Implement `crop_obb` / `obb()` if strict RFC-0003 completion is required.
+4. Run full `just ci` in an environment with `just` installed.
+5. Run full docs build after docs dependency sync.
 
 ## Architecture Decisions Made
 
 | Decision | Rationale |
-|----------|-----------|
-| `AttributeValue` uses `Vec<T>` not Burn tensors | Burn Router backend doesn't support u8/u16/u32/f64 element types; Vec gives correct dtype preservation |
-| XYZ stays as Burn `Tensor2` | GPU acceleration via Burn for transform/matmul ops |
-| Intensity/RGB/classification in unified attribute map | Simplifies selection, concatenation, and I/O; no special-case code |
-| Voxel keys sorted before RNG iteration | Ensures seeded determinism regardless of HashMap order |
-| `ConcatPolicy` as enum in `lib.rs` | Used by both `selection.rs` and Python bindings |
-| `select_indices` is the single primitive | All other selection ops lower to it; clean attribute propagation |
+|---|---|
+| `AttributeValue` uses `Vec<T>` for typed attrs | Burn Router backend does not carry all LAS attribute dtypes directly. |
+| Added `F32x6` packed covariance variant | RFC-0007 needs `[N, 6]` covariance storage while preserving typed attribute boundary. |
+| KD-tree falls back to brute-force on degenerate axis buckets | `kiddo` can panic on many identical values along an axis; fallback preserves correctness. |
+| GICP API staged behind covariance validation | Keeps RFC API usable while avoiding an unverified covariance-weighted solver. |
+| `just ci` no longer depends on pre-commit | CI should use pytest/cargo directly per user instruction; pre-commit remains separately available. |
+

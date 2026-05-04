@@ -379,6 +379,8 @@ class TestNeighborsNormalsOutliersRegistration:
         cov = pc.get_attribute("covariance")
         assert cov.shape == (4, 6)
         assert cov.dtype == np.float32
+        assert isinstance(pc.device(), str)
+        assert pc.to("cpu").point_count() == pc.point_count()
 
     def test_outlier_removal(self):
         xyz = np.array(

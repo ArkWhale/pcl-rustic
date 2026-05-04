@@ -110,6 +110,18 @@ impl HighPerformancePointCloud {
             .get_or_try_init(|| KdTreeIndex::build(self))
     }
 
+    pub fn to_device(&self, device: tensor::BackendDevice) -> Self {
+        Self {
+            xyz: self.xyz.clone().to_device(&device),
+            attributes: self.attributes.clone(),
+            kdtree_cache: OnceCell::new(),
+        }
+    }
+
+    pub fn device_name(&self) -> String {
+        format!("{:?}", self.xyz.device())
+    }
+
     // === Attribute access ===
 
     pub fn attributes(&self) -> &HashMap<String, AttributeValue> {

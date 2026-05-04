@@ -1,232 +1,103 @@
-# PointCloud 类
+# PointCloud
 
-点云核心类，提供点云的创建、属性管理和基本操作功能。
+`PointCloud` is the main NumPy-facing API. Coordinates are stored as `float32`
+XYZ. `from_xyz()` accepts `float32`, `float64`, `int32`, and `int64` arrays and
+autocasts to `float32`.
 
-!!! warning "数据类型要求"
-    所有输入数组必须是 **`dtype=float32`** 的 NumPy 数组。
+Attributes preserve their NumPy dtype for `float32`, `float64`, `uint8`,
+`uint16`, `uint32`, `int32`, `int64`, and `bool`. Packed covariance attributes
+use shape `[N, 6]` with `float32`.
 
-## API 列表
-
-### 构造方法
-
-- `PointCloud()`
-- `PointCloud.from_xyz(xyz: np.ndarray) -> PointCloud`
-- `PointCloud.from_xyz_intensity(xyz: np.ndarray, intensity: np.ndarray) -> PointCloud`
-- `PointCloud.from_xyz_rgb(xyz: np.ndarray, r: np.ndarray, g: np.ndarray, b: np.ndarray) -> PointCloud`
-- `PointCloud.from_xyz_intensity_rgb(xyz: np.ndarray, intensity: np.ndarray, r: np.ndarray, g: np.ndarray, b: np.ndarray) -> PointCloud`
-- `PointCloud.from_dict(data: dict[str, np.ndarray]) -> PointCloud`
-
-### 基本信息
-
-- `point_count() -> int`
-- `get_xyz() -> np.ndarray`
-- `has_intensity() -> bool`
-- `has_rgb() -> bool`
-- `get_intensity() -> np.ndarray | None`
-- `get_rgb() -> tuple[np.ndarray, np.ndarray, np.ndarray] | None`
-
-### 属性管理
-
-- `set_intensity(intensity: np.ndarray) -> None`
-- `set_rgb(r: np.ndarray, g: np.ndarray, b: np.ndarray) -> None`
-- `add_attribute(name: str, data: np.ndarray) -> None`
-- `set_attribute(name: str, data: np.ndarray) -> None`
-- `attribute_names() -> list[str]`
-- `get_attribute(name: str) -> np.ndarray | None`
-- `remove_attribute(name: str) -> None`
-- `clear_attributes() -> None`
-- `set_all_attributes(attributes: dict[str, list[float]]) -> None`
-- `has_attributes(names: list[str]) -> bool`
-- `attribute_info() -> list[tuple[str, int]]`
-- `remove_intensity() -> None`
-- `remove_rgb() -> None`
-
-### 变换与下采样
-
-- `transform(matrix: np.ndarray) -> PointCloud`
-- `rigid_transform(rotation: np.ndarray, translation: np.ndarray) -> PointCloud`
-- `voxel_downsample(voxel_size: float, strategy: int = DownsampleStrategy.CENTROID) -> PointCloud`
-
-### 文件 I/O
-
-- `PointCloud.from_las(path: str) -> PointCloud`
-- `to_las(path: str, compress: bool = False) -> None`
-- `PointCloud.from_csv(...) -> PointCloud`
-- `to_csv(...) -> None`
-- `PointCloud.from_parquet(...) -> PointCloud`
-- `to_parquet(...) -> None`
-- `PointCloud.load_from_file(...) -> PointCloud`
-- `save_to_file(...) -> None`
-
-### 其他
-
-- `memory_usage() -> int`
-- `to_dict() -> dict[str, np.ndarray]`
-- `clone() -> PointCloud`
-
-## 使用示例
-
-### 创建点云
+## Construction
 
 ```python
 import numpy as np
 from pcl_rustic import PointCloud
 
-xyz = np.random.randn(10000, 3).astype(np.float32) * 100
+xyz = np.random.randn(1000, 3).astype(np.float32)
 pc = PointCloud.from_xyz(xyz)
+
+pc = PointCloud.from_numpy({
+    "xyz": xyz,
+    "classification": np.random.randint(0, 8, len(xyz), dtype=np.uint8),
+    "gps_time": np.arange(len(xyz), dtype=np.float64),
+})
 ```
 
-### 添加属性
+## Attributes
 
 ```python
-intensity = np.random.rand(pc.point_count()).astype(np.float32) * 255
-pc.set_intensity(intensity)
+pc.set_attribute("classification", np.array([2, 6], dtype=np.uint8))
+pc.set_intensity(np.array([0.3, 0.8], dtype=np.float32))
 
-r = np.random.rand(pc.point_count()).astype(np.float32) * 255
-g = np.random.rand(pc.point_count()).astype(np.float32) * 255
-b = np.random.rand(pc.point_count()).astype(np.float32) * 255
-pc.set_rgb(r, g, b)
+classification = pc.get_attribute("classification")
+names = pc.attribute_names()
+info = pc.attribute_info()  # (name, length, dtype)
 ```
 
-### 读取属性
+Reserved LAS-oriented names include `intensity`, `red`, `green`, `blue`,
+`classification`, `return_number`, `number_of_returns`, and `gps_time`.
+
+## Selection
 
 ```python
-xyz = pc.get_xyz()
-
-if pc.has_intensity():
-    intensity = pc.get_intensity()
-
-if pc.has_rgb():
-    r, g, b = pc.get_rgb()
+ground = pc.select_by_classification([2])
+first_returns = pc.select_return_number(1)
+bright = pc.select_intensity_range(0.4, 1.0)
+low = pc.select_elevation_range(-2.0, 1.0)
+tile = pc.crop_aabb([0, 0, -5], [10, 10, 5])
 ```
 
-### 点云信息
+`select(mask)` accepts a boolean NumPy mask. `select_indices(indices)` preserves
+input order.
+
+## Concatenation
 
 ```python
-count = pc.point_count()
-xyz = pc.get_xyz()
-min_bound = xyz.min(axis=0)
-max_bound = xyz.max(axis=0)
-center = xyz.mean(axis=0)
+merged = PointCloud.concatenate([pc1, pc2], policy="strict")
+merged = PointCloud.concatenate([pc1, pc2], policy="union")
+merged = PointCloud.concatenate([pc1, pc2], policy="intersection")
 ```
 
-## 相关链接
+`strict` requires the same attribute names and dtypes. `union` zero-fills missing
+attributes. `intersection` keeps only attributes present in every input.
 
-- [下采样](downsample.md) - 点云降采样方法
-- [变换](transform.md) - 坐标系变换
-- [示例](../getting-started/examples.md) - 更多使用示例# PointCloud 类
-
-点云核心类，提供点云的创建、属性管理和基本操作功能。
-
-!!! warning "数据类型要求"
-    所有输入数组必须是 **`dtype=float32`** 的 NumPy 数组。
-
-## API 列表
-
-### 构造方法
-
-- `PointCloud()`
-```python
-import numpy as np
-from pcl_rustic import PointCloud
-
-xyz = np.random.randn(10000, 3).astype(np.float32) * 100
-pc = PointCloud.from_xyz(xyz)
-```
-
-### 添加属性
+## Neighbors And Normals
 
 ```python
-intensity = np.random.rand(pc.point_count()).astype(np.float32) * 255
-pc.set_intensity(intensity)
+from pcl_rustic import NormalSearch
 
-r = np.random.rand(pc.point_count()).astype(np.float32) * 255
-g = np.random.rand(pc.point_count()).astype(np.float32) * 255
-b = np.random.rand(pc.point_count()).astype(np.float32) * 255
-pc.set_rgb(r, g, b)
+indices, distances = pc.knn(query_xyz, k=16)
+hits = pc.radius_search(query_xyz, radius=0.5)
+
+pc.estimate_normals(NormalSearch.knn(30))
+normals = np.column_stack([
+    pc.get_attribute("nx"),
+    pc.get_attribute("ny"),
+    pc.get_attribute("nz"),
+])
+
+pc.estimate_covariances(knn=30)
+cov = pc.get_attribute("covariance")  # shape [N, 6]
 ```
 
-### 读取属性
+## Outlier Removal
 
 ```python
-xyz = pc.get_xyz()
-
-if pc.has_intensity():
-    intensity = pc.get_intensity()
-
-if pc.has_rgb():
-    r, g, b = pc.get_rgb()
+clean, kept_mask = pc.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
+clean, kept_mask = pc.remove_radius_outlier(nb_points=5, radius=0.1)
 ```
 
-### 点云信息
+The mask is a boolean array with one entry per input point.
+
+## Device
 
 ```python
-count = pc.point_count()
-xyz = pc.get_xyz()
-min_bound = xyz.min(axis=0)
-max_bound = xyz.max(axis=0)
-center = xyz.mean(axis=0)
+cpu_cloud = pc.to("cpu")
+gpu_cloud = pc.to("gpu")
+print(pc.device())
 ```
 
-## 相关链接
+Tensor-backed coordinate operations use Burn devices. Attribute vectors remain
+host-side to preserve typed LAS attributes.
 
-- [下采样](downsample.md) - 点云降采样方法
-- [变换](transform.md) - 坐标系变换
-- [示例](../getting-started/examples.md) - 更多使用示例
-### 其他
-
-- `memory_usage() -> int`
-- `to_dict() -> dict[str, np.ndarray]`
-- `clone() -> PointCloud`
-
-## 使用示例
-
-### 创建点云
-
-```python
-import numpy as np
-from pcl_rustic import PointCloud
-
-xyz = np.random.randn(10000, 3).astype(np.float32) * 100
-pc = PointCloud.from_xyz(xyz)
-```
-
-### 添加属性
-
-```python
-intensity = np.random.rand(pc.point_count()).astype(np.float32) * 255
-pc.set_intensity(intensity)
-
-r = np.random.rand(pc.point_count()).astype(np.float32) * 255
-g = np.random.rand(pc.point_count()).astype(np.float32) * 255
-b = np.random.rand(pc.point_count()).astype(np.float32) * 255
-pc.set_rgb(r, g, b)
-```
-
-### 读取属性
-
-```python
-xyz = pc.get_xyz()
-
-if pc.has_intensity():
-    intensity = pc.get_intensity()
-
-if pc.has_rgb():
-    r, g, b = pc.get_rgb()
-```
-
-### 点云信息
-
-```python
-count = pc.point_count()
-xyz = pc.get_xyz()
-min_bound = xyz.min(axis=0)
-max_bound = xyz.max(axis=0)
-center = xyz.mean(axis=0)
-```
-
-## 相关链接
-
-- [下采样](downsample.md) - 点云降采样方法
-- [变换](transform.md) - 坐标系变换
-- [示例](../getting-started/examples.md) - 更多使用示例
