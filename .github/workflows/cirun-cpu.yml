@@ -54,8 +54,7 @@ jobs:
           uv sync --locked --all-extras --dev
 
       - name: Run tests with coverage
-        run: |
-          just test
+        run: just ci
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v6

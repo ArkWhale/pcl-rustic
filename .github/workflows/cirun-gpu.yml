@@ -54,14 +54,13 @@ jobs:
           uv sync --locked --all-extras --dev
 
       - name: Run tests with coverage
-        run: |
-          just test
+        run: just ci
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v6
         if: matrix.python-version == '3.11'
         with:
-          files: ./coverage/coverage.xml
+          files: ./reports/coverage/coverage.xml
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

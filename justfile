@@ -9,13 +9,14 @@ install:
 
 # Build Rust extension in development mode
 dev:
-    maturin develop
+    uv run maturin develop
 
 # Build Rust extension in release mode
 build:
-    maturin develop --release
+    uv run maturin develop --release
 
 test:
+    just dev
     uv run pytest tests/ -v
 
 test-slow:
@@ -77,5 +78,5 @@ release: fmt lint test build wheel
     @echo "✅ Release checks passed!"
 
 # CI workflow: all checks
-ci: pre-commit test-rust test
+ci: test-rust test
     @echo "✅ CI checks passed!"

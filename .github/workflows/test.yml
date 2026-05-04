@@ -100,8 +100,7 @@ jobs:
           uv sync --locked --all-extras --dev
 
       - name: Run tests with coverage
-        run: |
-          just test
+        run: just ci
         env:
           PYTHONIOENCODING: utf-8
 

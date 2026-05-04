@@ -81,6 +81,12 @@ impl PyPointCloud {
         Ok(PyPointCloud { inner })
     }
 
+    #[staticmethod]
+    fn from_numpy(py: Python, data: &Bound<'_, PyDict>) -> PyResult<Self> {
+        let inner = HighPerformancePointCloud::from_numpy(py, data).map_err(PyErr::from)?;
+        Ok(PyPointCloud { inner })
+    }
+
     fn point_count(&self) -> usize {
         self.inner.point_count()
     }
@@ -753,7 +759,13 @@ impl PyRegistrationResult {
         use numpy::ndarray::Array2;
         use numpy::IntoPyArray;
 
-        let arr = Array2::from_shape_vec((4, 4), self.inner.transformation.as_slice().to_vec())
+        let mut row_major = Vec::with_capacity(16);
+        for row in 0..4 {
+            for col in 0..4 {
+                row_major.push(self.inner.transformation[(row, col)]);
+            }
+        }
+        let arr = Array2::from_shape_vec((4, 4), row_major)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         Ok(arr.into_pyarray(py).into_any().unbind())
     }
