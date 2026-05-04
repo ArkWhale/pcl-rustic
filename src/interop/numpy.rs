@@ -77,7 +77,8 @@ impl HighPerformancePointCloud {
             AttributeValue::F32(v) => AttributeValue::F32(v),
             other => AttributeValue::F32(other.to_f32_vec()),
         };
-        self.attributes_mut().insert("intensity".to_string(), f32_val);
+        self.attributes_mut()
+            .insert("intensity".to_string(), f32_val);
         Ok(())
     }
 
@@ -140,7 +141,9 @@ fn read_xyz_from_pyany(obj: &Bound<'_, pyo3::PyAny>) -> Result<Tensor2> {
     if let Ok(arr) = obj.cast::<PyArray2<f32>>() {
         let shape = arr.shape();
         if shape[1] != 3 {
-            return Err(format!("XYZ must have shape [N,3], got [{},{}]", shape[0], shape[1]).into());
+            return Err(
+                format!("XYZ must have shape [N,3], got [{},{}]", shape[0], shape[1]).into(),
+            );
         }
         let readonly = arr.readonly();
         let slice = readonly
@@ -153,13 +156,13 @@ fn read_xyz_from_pyany(obj: &Bound<'_, pyo3::PyAny>) -> Result<Tensor2> {
     if let Ok(arr) = obj.cast::<PyArray2<f64>>() {
         let shape = arr.shape();
         if shape[1] != 3 {
-            return Err(format!("XYZ must have shape [N,3], got [{},{}]", shape[0], shape[1]).into());
+            return Err(
+                format!("XYZ must have shape [N,3], got [{},{}]", shape[0], shape[1]).into(),
+            );
         }
         log::debug!("Autocasting f64 XYZ input to f32");
         let readonly = arr.readonly();
-        let slice = readonly
-            .as_slice()
-            .map_err(|_| "cannot read xyz data")?;
+        let slice = readonly.as_slice().map_err(|_| "cannot read xyz data")?;
         let f32_data: Vec<f32> = slice.iter().map(|&x| x as f32).collect();
         return tensor::tensor2_from_slice(&f32_data, shape[0], shape[1]);
     }
@@ -168,13 +171,13 @@ fn read_xyz_from_pyany(obj: &Bound<'_, pyo3::PyAny>) -> Result<Tensor2> {
     if let Ok(arr) = obj.cast::<PyArray2<i32>>() {
         let shape = arr.shape();
         if shape[1] != 3 {
-            return Err(format!("XYZ must have shape [N,3], got [{},{}]", shape[0], shape[1]).into());
+            return Err(
+                format!("XYZ must have shape [N,3], got [{},{}]", shape[0], shape[1]).into(),
+            );
         }
         log::debug!("Autocasting i32 XYZ input to f32");
         let readonly = arr.readonly();
-        let slice = readonly
-            .as_slice()
-            .map_err(|_| "cannot read xyz data")?;
+        let slice = readonly.as_slice().map_err(|_| "cannot read xyz data")?;
         let f32_data: Vec<f32> = slice.iter().map(|&x| x as f32).collect();
         return tensor::tensor2_from_slice(&f32_data, shape[0], shape[1]);
     }
@@ -183,13 +186,13 @@ fn read_xyz_from_pyany(obj: &Bound<'_, pyo3::PyAny>) -> Result<Tensor2> {
     if let Ok(arr) = obj.cast::<PyArray2<i64>>() {
         let shape = arr.shape();
         if shape[1] != 3 {
-            return Err(format!("XYZ must have shape [N,3], got [{},{}]", shape[0], shape[1]).into());
+            return Err(
+                format!("XYZ must have shape [N,3], got [{},{}]", shape[0], shape[1]).into(),
+            );
         }
         log::debug!("Autocasting i64 XYZ input to f32");
         let readonly = arr.readonly();
-        let slice = readonly
-            .as_slice()
-            .map_err(|_| "cannot read xyz data")?;
+        let slice = readonly.as_slice().map_err(|_| "cannot read xyz data")?;
         let f32_data: Vec<f32> = slice.iter().map(|&x| x as f32).collect();
         return tensor::tensor2_from_slice(&f32_data, shape[0], shape[1]);
     }
@@ -198,6 +201,21 @@ fn read_xyz_from_pyany(obj: &Bound<'_, pyo3::PyAny>) -> Result<Tensor2> {
 }
 
 pub fn read_attribute_from_pyany(obj: &Bound<'_, pyo3::PyAny>) -> Result<AttributeValue> {
+    // 2D f32 attributes are reserved for packed covariance rows [N, 6].
+    if let Ok(arr) = obj.cast::<PyArray2<f32>>() {
+        let shape = arr.shape();
+        if shape[1] != 6 {
+            return Err("2D float32 attributes must have shape [N,6]".into());
+        }
+        let readonly = arr.readonly();
+        let slice = readonly.as_slice().map_err(|_| "cannot read array data")?;
+        let rows = slice
+            .chunks_exact(6)
+            .map(|row| [row[0], row[1], row[2], row[3], row[4], row[5]])
+            .collect();
+        return Ok(AttributeValue::F32x6(rows));
+    }
+
     // Try f32
     if let Ok(arr) = obj.cast::<PyArray1<f32>>() {
         let readonly = arr.readonly();
@@ -282,6 +300,12 @@ pub fn attribute_to_numpy(py: Python<'_>, attr: &AttributeValue) -> Result<Py<Py
         }
         AttributeValue::Bool(v) => {
             let nd = Array1::from_vec(v.clone());
+            IntoPyArray::into_pyarray(nd, py).into()
+        }
+        AttributeValue::F32x6(v) => {
+            let flat: Vec<f32> = v.iter().flat_map(|row| row.iter().copied()).collect();
+            let nd = Array2::from_shape_vec((v.len(), 6), flat)
+                .map_err(|e| format!("attribute shape error: {}", e))?;
             IntoPyArray::into_pyarray(nd, py).into()
         }
     })

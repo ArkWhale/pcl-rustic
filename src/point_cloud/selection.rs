@@ -16,9 +16,7 @@ impl HighPerformancePointCloud {
             )
         })?;
         let class_data = attr.as_u8().ok_or_else(|| {
-            PointCloudError::InvalidParameter(
-                "classification attribute is not u8".to_string(),
-            )
+            PointCloudError::InvalidParameter("classification attribute is not u8".to_string())
         })?;
         let code_set: HashSet<u8> = codes.iter().copied().collect();
         let mask: Vec<bool> = class_data.iter().map(|c| code_set.contains(c)).collect();
@@ -34,10 +32,7 @@ impl HighPerformancePointCloud {
         let intensity_data = attr.as_f32().ok_or_else(|| {
             PointCloudError::InvalidParameter("intensity attribute is not f32".to_string())
         })?;
-        let mask: Vec<bool> = intensity_data
-            .iter()
-            .map(|&v| v >= lo && v <= hi)
-            .collect();
+        let mask: Vec<bool> = intensity_data.iter().map(|&v| v >= lo && v <= hi).collect();
         self.select_mask(&mask)
     }
 

@@ -1,13 +1,25 @@
+use crate::neighbors::kdtree::KdTreeIndex;
 use crate::point_cloud::attribute_value::AttributeValue;
 use crate::utils::error::{PointCloudError, Result};
 use crate::utils::tensor;
 use crate::utils::tensor::Tensor2;
+use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 
-#[derive(Clone)]
 pub struct HighPerformancePointCloud {
     xyz: Tensor2,
     attributes: HashMap<String, AttributeValue>,
+    kdtree_cache: OnceCell<KdTreeIndex>,
+}
+
+impl Clone for HighPerformancePointCloud {
+    fn clone(&self) -> Self {
+        Self {
+            xyz: self.xyz.clone(),
+            attributes: self.attributes.clone(),
+            kdtree_cache: OnceCell::new(),
+        }
+    }
 }
 
 impl HighPerformancePointCloud {
@@ -15,6 +27,7 @@ impl HighPerformancePointCloud {
         Self {
             xyz: tensor::empty_xyz(),
             attributes: HashMap::new(),
+            kdtree_cache: OnceCell::new(),
         }
     }
 
@@ -29,6 +42,7 @@ impl HighPerformancePointCloud {
         Ok(Self {
             xyz,
             attributes: HashMap::new(),
+            kdtree_cache: OnceCell::new(),
         })
     }
 
@@ -43,6 +57,7 @@ impl HighPerformancePointCloud {
         Ok(Self {
             xyz: t,
             attributes: HashMap::new(),
+            kdtree_cache: OnceCell::new(),
         })
     }
 
@@ -61,6 +76,7 @@ impl HighPerformancePointCloud {
         Ok(Self {
             xyz: t,
             attributes: HashMap::new(),
+            kdtree_cache: OnceCell::new(),
         })
     }
 
@@ -87,6 +103,11 @@ impl HighPerformancePointCloud {
         let data = self.xyz.to_data();
         data.to_vec::<f32>()
             .expect("Failed to convert XYZ tensor to Vec<f32>")
+    }
+
+    pub fn kdtree(&self) -> Result<&KdTreeIndex> {
+        self.kdtree_cache
+            .get_or_try_init(|| KdTreeIndex::build(self))
     }
 
     // === Attribute access ===

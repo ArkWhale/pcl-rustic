@@ -92,7 +92,10 @@ impl HighPerformancePointCloud {
     }
 
     pub fn rigid_transform(&self, rotation: &[[f32; 3]; 3], translation: [f32; 3]) -> Result<Self> {
-        let flat: Vec<f32> = rotation.iter().flat_map(|row| row.iter().copied()).collect();
+        let flat: Vec<f32> = rotation
+            .iter()
+            .flat_map(|row| row.iter().copied())
+            .collect();
         let rot_tensor = tensor::tensor2_from_slice(&flat, 3, 3)?;
         let rot_t = rot_tensor.transpose();
 
@@ -145,9 +148,8 @@ mod tests {
 
     #[test]
     fn test_scale() {
-        let pc =
-            HighPerformancePointCloud::from_xyz_vec(vec![[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]])
-                .unwrap();
+        let pc = HighPerformancePointCloud::from_xyz_vec(vec![[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]])
+            .unwrap();
         let result = pc.scale(2.0, Some([0.0, 0.0, 0.0])).unwrap();
         let xyz = result.get_xyz_vec();
         assert!((xyz[0][0] - 2.0).abs() < 1e-5);

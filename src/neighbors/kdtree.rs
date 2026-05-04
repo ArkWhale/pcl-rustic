@@ -1,0 +1,215 @@
+use crate::point_cloud::core::HighPerformancePointCloud;
+use crate::utils::error::{PointCloudError, Result};
+use kiddo::{KdTree, SquaredEuclidean};
+
+#[derive(Clone, Debug)]
+pub struct NeighborHit {
+    pub index: u64,
+    pub distance: f32,
+}
+
+pub struct KdTreeIndex {
+    inner: Option<KdTree<f32, 3>>,
+    xyz_host: Vec<[f32; 3]>,
+}
+
+impl KdTreeIndex {
+    pub fn build(pc: &HighPerformancePointCloud) -> Result<Self> {
+        let xyz_host = pc.get_xyz_vec();
+        if xyz_host.is_empty() {
+            return Err(PointCloudError::InvalidParameter(
+                "cannot build KD-tree for an empty point cloud".to_string(),
+            ));
+        }
+        if xyz_host.iter().flatten().any(|v| !v.is_finite()) {
+            return Err(PointCloudError::InvalidParameter(
+                "cannot build KD-tree with non-finite coordinates".to_string(),
+            ));
+        }
+
+        let inner = if has_axis_bucket_over_limit(&xyz_host, 32) {
+            log::warn!(
+                "degenerate geometry exceeds kiddo bucket limits; using brute-force queries"
+            );
+            None
+        } else {
+            let mut inner: KdTree<f32, 3> = KdTree::new();
+            for (idx, point) in xyz_host.iter().enumerate() {
+                inner.add(point, idx as u64);
+            }
+            Some(inner)
+        };
+        Ok(Self { inner, xyz_host })
+    }
+
+    pub fn point_count(&self) -> usize {
+        self.xyz_host.len()
+    }
+
+    pub fn xyz(&self) -> &[[f32; 3]] {
+        &self.xyz_host
+    }
+
+    pub fn knn(&self, query: &[[f32; 3]], k: usize) -> Result<Vec<Vec<NeighborHit>>> {
+        if k == 0 {
+            return Err(PointCloudError::InvalidParameter(
+                "k must be greater than zero".to_string(),
+            ));
+        }
+        let k = k.min(self.xyz_host.len());
+        if let Some(inner) = &self.inner {
+            Ok(query
+                .iter()
+                .map(|point| {
+                    inner
+                        .nearest_n::<SquaredEuclidean>(point, k)
+                        .into_iter()
+                        .map(|hit| NeighborHit {
+                            index: hit.item,
+                            distance: hit.distance.sqrt(),
+                        })
+                        .collect()
+                })
+                .collect())
+        } else {
+            Ok(query
+                .iter()
+                .map(|point| brute_force_knn(&self.xyz_host, point, k))
+                .collect())
+        }
+    }
+
+    pub fn radius_search(&self, query: &[[f32; 3]], radius: f32) -> Result<Vec<Vec<NeighborHit>>> {
+        if radius < 0.0 || !radius.is_finite() {
+            return Err(PointCloudError::InvalidParameter(
+                "radius must be finite and non-negative".to_string(),
+            ));
+        }
+        let radius_sq = radius * radius;
+        if let Some(inner) = &self.inner {
+            Ok(query
+                .iter()
+                .map(|point| {
+                    inner
+                        .within::<SquaredEuclidean>(point, radius_sq)
+                        .into_iter()
+                        .map(|hit| NeighborHit {
+                            index: hit.item,
+                            distance: hit.distance.sqrt(),
+                        })
+                        .collect()
+                })
+                .collect())
+        } else {
+            Ok(query
+                .iter()
+                .map(|point| brute_force_radius(&self.xyz_host, point, radius))
+                .collect())
+        }
+    }
+}
+
+fn brute_force_knn(xyz: &[[f32; 3]], query: &[f32; 3], k: usize) -> Vec<NeighborHit> {
+    let mut hits: Vec<NeighborHit> = xyz
+        .iter()
+        .enumerate()
+        .map(|(idx, point)| NeighborHit {
+            index: idx as u64,
+            distance: distance(point, query),
+        })
+        .collect();
+    hits.sort_by(|a, b| {
+        a.distance
+            .partial_cmp(&b.distance)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    hits.truncate(k);
+    hits
+}
+
+fn brute_force_radius(xyz: &[[f32; 3]], query: &[f32; 3], radius: f32) -> Vec<NeighborHit> {
+    let mut hits: Vec<NeighborHit> = xyz
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, point)| {
+            let d = distance(point, query);
+            (d <= radius).then_some(NeighborHit {
+                index: idx as u64,
+                distance: d,
+            })
+        })
+        .collect();
+    hits.sort_by(|a, b| {
+        a.distance
+            .partial_cmp(&b.distance)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    hits
+}
+
+fn distance(a: &[f32; 3], b: &[f32; 3]) -> f32 {
+    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+}
+
+fn has_axis_bucket_over_limit(xyz: &[[f32; 3]], limit: usize) -> bool {
+    for axis in 0..3 {
+        let mut values: Vec<u32> = xyz.iter().map(|p| p[axis].to_bits()).collect();
+        values.sort_unstable();
+        let mut run = 1usize;
+        for pair in values.windows(2) {
+            if pair[0] == pair[1] {
+                run += 1;
+                if run > limit {
+                    return true;
+                }
+            } else {
+                run = 1;
+            }
+        }
+    }
+    false
+}
+
+impl HighPerformancePointCloud {
+    pub fn knn(&self, query: &[[f32; 3]], k: usize) -> Result<Vec<Vec<NeighborHit>>> {
+        self.kdtree()?.knn(query, k)
+    }
+
+    pub fn radius_search(&self, query: &[[f32; 3]], radius: f32) -> Result<Vec<Vec<NeighborHit>>> {
+        self.kdtree()?.radius_search(query, radius)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn knn_matches_expected_order() {
+        let pc = HighPerformancePointCloud::from_xyz_vec(vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+        ])
+        .unwrap();
+        let hits = pc.knn(&[[0.1, 0.0, 0.0]], 2).unwrap();
+        assert_eq!(hits[0][0].index, 0);
+        assert_eq!(hits[0][1].index, 1);
+    }
+
+    #[test]
+    fn radius_search_matches_expected_set() {
+        let pc = HighPerformancePointCloud::from_xyz_vec(vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [3.0, 0.0, 0.0],
+        ])
+        .unwrap();
+        let mut ids: Vec<u64> = pc.radius_search(&[[0.0, 0.0, 0.0]], 1.1).unwrap()[0]
+            .iter()
+            .map(|hit| hit.index)
+            .collect();
+        ids.sort_unstable();
+        assert_eq!(ids, vec![0, 1]);
+    }
+}

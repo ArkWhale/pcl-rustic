@@ -1,19 +1,33 @@
 #![recursion_limit = "256"]
 mod interop;
 mod io;
+mod neighbors;
 mod point_cloud;
+mod registration;
 mod utils;
 
 use interop::numpy::{attribute_to_numpy, read_attribute_from_pyany};
+use neighbors::normals::NormalSearch;
+use neighbors::octree::Octree;
 use point_cloud::core::HighPerformancePointCloud;
 use point_cloud::voxel::DownsampleStrategy;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyModule};
+use registration::{ICPConvergenceCriteria, RegistrationResult, TransformationEstimation};
 
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPointCloud>()?;
     m.add_class::<PyDownsampleStrategy>()?;
+    m.add_class::<PyNormalSearch>()?;
+    m.add_class::<PyOctree>()?;
+    let reg = PyModule::new(m.py(), "registration")?;
+    reg.add_class::<PyICPConvergenceCriteria>()?;
+    reg.add_class::<PyTransformationEstimation>()?;
+    reg.add_class::<PyRegistrationResult>()?;
+    reg.add_function(wrap_pyfunction!(py_icp, &reg)?)?;
+    reg.add_function(wrap_pyfunction!(py_evaluate, &reg)?)?;
+    m.add_submodule(&reg)?;
     Ok(())
 }
 
@@ -171,7 +185,9 @@ impl PyPointCloud {
     }
 
     fn has_attributes(&self, names: Vec<String>) -> bool {
-        names.iter().all(|n| self.inner.attributes().contains_key(n))
+        names
+            .iter()
+            .all(|n| self.inner.attributes().contains_key(n))
     }
 
     fn attribute_info(&self) -> Vec<(String, usize, String)> {
@@ -301,18 +317,17 @@ impl PyPointCloud {
         strategy: i32,
         seed: Option<u64>,
     ) -> PyResult<Self> {
-        let strat = match strategy {
-            0 => DownsampleStrategy::RandomSeeded {
-                seed: seed.unwrap_or(42),
-            },
-            1 => DownsampleStrategy::NearestToCentroid,
-            2 => DownsampleStrategy::Average,
-            _ => {
-                return Err(pyo3::exceptions::PyValueError::new_err(
+        let strat =
+            match strategy {
+                0 => DownsampleStrategy::RandomSeeded {
+                    seed: seed.unwrap_or(42),
+                },
+                1 => DownsampleStrategy::NearestToCentroid,
+                2 => DownsampleStrategy::Average,
+                _ => return Err(pyo3::exceptions::PyValueError::new_err(
                     "strategy must be 0 (RANDOM_SEEDED), 1 (NEAREST_TO_CENTROID), or 2 (AVERAGE)",
-                ))
-            }
-        };
+                )),
+            };
         let result = self
             .inner
             .voxel_downsample(voxel_size, &strat)
@@ -328,18 +343,15 @@ impl PyPointCloud {
             pyo3::exceptions::PyTypeError::new_err("mask must be a boolean numpy array")
         })?;
         let readonly = arr.readonly();
-        let slice = readonly.as_slice().map_err(|_| {
-            pyo3::exceptions::PyValueError::new_err("cannot read mask data")
-        })?;
+        let slice = readonly
+            .as_slice()
+            .map_err(|_| pyo3::exceptions::PyValueError::new_err("cannot read mask data"))?;
         let result = self.inner.select_mask(slice).map_err(PyErr::from)?;
         Ok(PyPointCloud { inner: result })
     }
 
     fn select_indices(&self, indices: Vec<usize>) -> PyResult<Self> {
-        let result = self
-            .inner
-            .select_indices(&indices)
-            .map_err(PyErr::from)?;
+        let result = self.inner.select_indices(&indices).map_err(PyErr::from)?;
         Ok(PyPointCloud { inner: result })
     }
 
@@ -357,6 +369,145 @@ impl PyPointCloud {
             .select_intensity_range(lo, hi)
             .map_err(PyErr::from)?;
         Ok(PyPointCloud { inner: result })
+    }
+
+    fn select_return_number(&self, n: u8) -> PyResult<Self> {
+        let result = self.inner.select_return_number(n).map_err(PyErr::from)?;
+        Ok(PyPointCloud { inner: result })
+    }
+
+    fn select_elevation_range(&self, lo: f32, hi: f32) -> PyResult<Self> {
+        let result = self
+            .inner
+            .select_elevation_range(lo, hi)
+            .map_err(PyErr::from)?;
+        Ok(PyPointCloud { inner: result })
+    }
+
+    fn crop_aabb(&self, min: Vec<f32>, max: Vec<f32>) -> PyResult<Self> {
+        if min.len() != 3 || max.len() != 3 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "min and max must both have length 3",
+            ));
+        }
+        let result = self
+            .inner
+            .crop_aabb([min[0], min[1], min[2]], [max[0], max[1], max[2]])
+            .map_err(PyErr::from)?;
+        Ok(PyPointCloud { inner: result })
+    }
+
+    fn aabb(&self) -> ([f32; 3], [f32; 3]) {
+        self.inner.aabb()
+    }
+
+    // === Neighbors, normals, outliers ===
+
+    fn knn(
+        &self,
+        py: Python,
+        query: &Bound<'_, pyo3::PyAny>,
+        k: usize,
+    ) -> PyResult<(Py<PyAny>, Py<PyAny>)> {
+        use numpy::ndarray::Array2;
+        use numpy::IntoPyArray;
+
+        let query = read_query_points(query)?;
+        let hits = self.inner.knn(&query, k).map_err(PyErr::from)?;
+        let q = hits.len();
+        let width = hits.first().map(|row| row.len()).unwrap_or(0);
+        let mut indices = Vec::with_capacity(q * width);
+        let mut distances = Vec::with_capacity(q * width);
+        for row in hits {
+            for hit in row {
+                indices.push(hit.index as i64);
+                distances.push(hit.distance);
+            }
+        }
+        let idx_np = Array2::from_shape_vec((q, width), indices)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
+            .into_pyarray(py);
+        let dist_np = Array2::from_shape_vec((q, width), distances)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
+            .into_pyarray(py);
+        Ok((idx_np.into_any().unbind(), dist_np.into_any().unbind()))
+    }
+
+    fn radius_search(
+        &self,
+        py: Python,
+        query: &Bound<'_, pyo3::PyAny>,
+        radius: f32,
+    ) -> PyResult<Vec<Py<PyAny>>> {
+        use numpy::ndarray::Array1;
+        use numpy::IntoPyArray;
+
+        let query = read_query_points(query)?;
+        let hits = self
+            .inner
+            .radius_search(&query, radius)
+            .map_err(PyErr::from)?;
+        let mut out = Vec::with_capacity(hits.len());
+        for row in hits {
+            let indices: Vec<i64> = row.into_iter().map(|hit| hit.index as i64).collect();
+            out.push(
+                Array1::from_vec(indices)
+                    .into_pyarray(py)
+                    .into_any()
+                    .unbind(),
+            );
+        }
+        Ok(out)
+    }
+
+    fn estimate_normals(&mut self, search: PyRef<'_, PyNormalSearch>) -> PyResult<()> {
+        self.inner
+            .estimate_normals(search.inner.clone())
+            .map_err(PyErr::from)
+    }
+
+    fn estimate_covariances(&mut self, knn: usize) -> PyResult<()> {
+        self.inner.estimate_covariances(knn).map_err(PyErr::from)
+    }
+
+    fn remove_statistical_outlier(
+        &self,
+        py: Python,
+        nb_neighbors: usize,
+        std_ratio: f32,
+    ) -> PyResult<(Self, Py<PyAny>)> {
+        use numpy::ndarray::Array1;
+        use numpy::IntoPyArray;
+
+        let (filtered, mask) = self
+            .inner
+            .remove_statistical_outlier(nb_neighbors, std_ratio)
+            .map_err(PyErr::from)?;
+        let mask_np = Array1::from_vec(mask).into_pyarray(py).into_any().unbind();
+        Ok((PyPointCloud { inner: filtered }, mask_np))
+    }
+
+    fn remove_radius_outlier(
+        &self,
+        py: Python,
+        nb_points: usize,
+        radius: f32,
+    ) -> PyResult<(Self, Py<PyAny>)> {
+        use numpy::ndarray::Array1;
+        use numpy::IntoPyArray;
+
+        let (filtered, mask) = self
+            .inner
+            .remove_radius_outlier(nb_points, radius)
+            .map_err(PyErr::from)?;
+        let mask_np = Array1::from_vec(mask).into_pyarray(py).into_any().unbind();
+        Ok((PyPointCloud { inner: filtered }, mask_np))
+    }
+
+    fn octree(&self, max_depth: u8) -> PyResult<PyOctree> {
+        Ok(PyOctree {
+            inner: self.inner.octree(max_depth).map_err(PyErr::from)?,
+        })
     }
 
     // === Concatenation ===
@@ -470,4 +621,274 @@ impl PyDownsampleStrategy {
     fn CENTROID() -> i32 {
         1
     }
+}
+
+// === NormalSearch Python class ===
+
+#[pyclass(name = "NormalSearch")]
+pub struct PyNormalSearch {
+    inner: NormalSearch,
+}
+
+#[pymethods]
+impl PyNormalSearch {
+    #[staticmethod]
+    fn knn(k: usize) -> Self {
+        Self {
+            inner: NormalSearch::Knn(k),
+        }
+    }
+
+    #[staticmethod]
+    fn radius(radius: f32) -> Self {
+        Self {
+            inner: NormalSearch::Radius(radius),
+        }
+    }
+
+    #[staticmethod]
+    fn hybrid(radius: f32, k: usize) -> Self {
+        Self {
+            inner: NormalSearch::Hybrid(radius, k),
+        }
+    }
+}
+
+// === Octree Python class ===
+
+#[pyclass(name = "Octree")]
+pub struct PyOctree {
+    inner: Octree,
+}
+
+#[pymethods]
+impl PyOctree {
+    fn range_search(&self, center: Vec<f32>, radius: f32) -> PyResult<Vec<u64>> {
+        if center.len() != 3 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "center must have length 3",
+            ));
+        }
+        self.inner
+            .range_search(&[center[0], center[1], center[2]], radius)
+            .map_err(PyErr::from)
+    }
+
+    fn voxel_centers(&self, py: Python) -> PyResult<Py<PyAny>> {
+        use numpy::ndarray::Array2;
+        use numpy::IntoPyArray;
+
+        let centers = self.inner.voxel_centers();
+        let flat: Vec<f32> = centers.iter().flat_map(|p| p.iter().copied()).collect();
+        let arr = Array2::from_shape_vec((centers.len(), 3), flat)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(arr.into_pyarray(py).into_any().unbind())
+    }
+}
+
+// === Registration Python classes and functions ===
+
+#[pyclass(name = "ICPConvergenceCriteria")]
+#[derive(Clone)]
+pub struct PyICPConvergenceCriteria {
+    inner: ICPConvergenceCriteria,
+}
+
+#[pymethods]
+impl PyICPConvergenceCriteria {
+    #[new]
+    #[pyo3(signature = (max_iteration = 30, relative_fitness = 1e-6, relative_rmse = 1e-6))]
+    fn new(max_iteration: usize, relative_fitness: f32, relative_rmse: f32) -> Self {
+        Self {
+            inner: ICPConvergenceCriteria {
+                max_iteration,
+                relative_fitness,
+                relative_rmse,
+            },
+        }
+    }
+}
+
+#[pyclass(name = "TransformationEstimation")]
+#[derive(Clone)]
+pub struct PyTransformationEstimation {
+    inner: TransformationEstimation,
+}
+
+#[pymethods]
+impl PyTransformationEstimation {
+    #[staticmethod]
+    fn point_to_point() -> Self {
+        Self {
+            inner: TransformationEstimation::PointToPoint,
+        }
+    }
+
+    #[staticmethod]
+    fn point_to_plane() -> Self {
+        Self {
+            inner: TransformationEstimation::PointToPlane,
+        }
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (epsilon = 1e-3))]
+    fn generalized(epsilon: f32) -> Self {
+        Self {
+            inner: TransformationEstimation::Generalized { epsilon },
+        }
+    }
+}
+
+#[pyclass(name = "RegistrationResult")]
+#[derive(Clone)]
+pub struct PyRegistrationResult {
+    inner: RegistrationResult,
+}
+
+#[pymethods]
+impl PyRegistrationResult {
+    #[getter]
+    fn transformation(&self, py: Python) -> PyResult<Py<PyAny>> {
+        use numpy::ndarray::Array2;
+        use numpy::IntoPyArray;
+
+        let arr = Array2::from_shape_vec((4, 4), self.inner.transformation.as_slice().to_vec())
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(arr.into_pyarray(py).into_any().unbind())
+    }
+
+    #[getter]
+    fn fitness(&self) -> f32 {
+        self.inner.fitness
+    }
+
+    #[getter]
+    fn inlier_rmse(&self) -> f32 {
+        self.inner.inlier_rmse
+    }
+
+    #[getter]
+    fn correspondence_set(&self) -> Vec<(u64, u64)> {
+        self.inner.correspondence_set.clone()
+    }
+}
+
+#[pyfunction(name = "icp")]
+#[pyo3(signature = (source, target, max_correspondence_distance, init, estimation = None, criteria = None))]
+fn py_icp(
+    source: PyRef<'_, PyPointCloud>,
+    target: PyRef<'_, PyPointCloud>,
+    max_correspondence_distance: f32,
+    init: &Bound<'_, pyo3::PyAny>,
+    estimation: Option<PyRef<'_, PyTransformationEstimation>>,
+    criteria: Option<PyRef<'_, PyICPConvergenceCriteria>>,
+) -> PyResult<PyRegistrationResult> {
+    let init = read_matrix4(init)?;
+    let estimation = estimation
+        .as_ref()
+        .map(|e| e.inner.clone())
+        .unwrap_or(TransformationEstimation::PointToPoint);
+    let criteria = criteria
+        .as_ref()
+        .map(|c| c.inner.clone())
+        .unwrap_or_default();
+    let inner = registration::icp(
+        &source.inner,
+        &target.inner,
+        max_correspondence_distance,
+        init,
+        estimation,
+        criteria,
+    )
+    .map_err(PyErr::from)?;
+    Ok(PyRegistrationResult { inner })
+}
+
+#[pyfunction(name = "evaluate")]
+fn py_evaluate(
+    source: PyRef<'_, PyPointCloud>,
+    target: PyRef<'_, PyPointCloud>,
+    max_correspondence_distance: f32,
+    transformation: &Bound<'_, pyo3::PyAny>,
+) -> PyResult<PyRegistrationResult> {
+    let transformation = read_matrix4(transformation)?;
+    let inner = registration::evaluate(
+        &source.inner,
+        &target.inner,
+        max_correspondence_distance,
+        transformation,
+    )
+    .map_err(PyErr::from)?;
+    Ok(PyRegistrationResult { inner })
+}
+
+fn read_query_points(obj: &Bound<'_, pyo3::PyAny>) -> PyResult<Vec<[f32; 3]>> {
+    use numpy::{PyArray2, PyArrayMethods, PyUntypedArrayMethods};
+
+    if let Ok(arr) = obj.cast::<PyArray2<f32>>() {
+        let shape = arr.shape();
+        if shape[1] != 3 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "query must have shape [N,3]",
+            ));
+        }
+        let readonly = arr.readonly();
+        let slice = readonly
+            .as_slice()
+            .map_err(|_| pyo3::exceptions::PyValueError::new_err("query must be contiguous"))?;
+        return Ok(slice
+            .chunks_exact(3)
+            .map(|row| [row[0], row[1], row[2]])
+            .collect());
+    }
+
+    if let Ok(arr) = obj.cast::<PyArray2<f64>>() {
+        let shape = arr.shape();
+        if shape[1] != 3 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "query must have shape [N,3]",
+            ));
+        }
+        let readonly = arr.readonly();
+        let slice = readonly
+            .as_slice()
+            .map_err(|_| pyo3::exceptions::PyValueError::new_err("query must be contiguous"))?;
+        return Ok(slice
+            .chunks_exact(3)
+            .map(|row| [row[0] as f32, row[1] as f32, row[2] as f32])
+            .collect());
+    }
+
+    Err(pyo3::exceptions::PyTypeError::new_err(
+        "query must be a float32 or float64 numpy array",
+    ))
+}
+
+fn read_matrix4(obj: &Bound<'_, pyo3::PyAny>) -> PyResult<nalgebra::Matrix4<f32>> {
+    use numpy::{PyArray2, PyArrayMethods, PyUntypedArrayMethods};
+
+    if let Ok(arr) = obj.cast::<PyArray2<f32>>() {
+        let shape = arr.shape();
+        if shape != [4, 4] {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "matrix must have shape [4,4]",
+            ));
+        }
+        let readonly = arr.readonly();
+        let slice = readonly
+            .as_slice()
+            .map_err(|_| pyo3::exceptions::PyValueError::new_err("matrix must be contiguous"))?;
+        return Ok(nalgebra::Matrix4::from_row_slice(slice));
+    }
+
+    let rows: Vec<Vec<f32>> = obj.extract()?;
+    if rows.len() != 4 || !rows.iter().all(|row| row.len() == 4) {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "matrix must have shape [4,4]",
+        ));
+    }
+    Ok(nalgebra::Matrix4::from_row_slice(
+        &rows.into_iter().flatten().collect::<Vec<_>>(),
+    ))
 }

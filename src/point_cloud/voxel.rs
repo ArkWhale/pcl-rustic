@@ -13,11 +13,7 @@ pub enum DownsampleStrategy {
 }
 
 impl HighPerformancePointCloud {
-    pub fn voxel_downsample(
-        &self,
-        voxel_size: f32,
-        strategy: &DownsampleStrategy,
-    ) -> Result<Self> {
+    pub fn voxel_downsample(&self, voxel_size: f32, strategy: &DownsampleStrategy) -> Result<Self> {
         if self.is_empty() {
             return Err(PointCloudError::InvalidParameter(
                 "cannot downsample an empty point cloud".to_string(),
@@ -129,6 +125,9 @@ impl HighPerformancePointCloud {
                 crate::point_cloud::attribute_value::AttrDType::Bool => {
                     AttributeValue::Bool(Vec::with_capacity(n_voxels))
                 }
+                crate::point_cloud::attribute_value::AttrDType::F32x6 => {
+                    AttributeValue::F32x6(Vec::with_capacity(n_voxels))
+                }
             };
             new_attrs.insert(name.clone(), empty);
         }
@@ -186,13 +185,11 @@ fn dist_sq(a: &[f32; 3], b: &[f32; 3]) -> f32 {
 fn average_attribute_into(out: &mut AttributeValue, src: &AttributeValue, indices: &[usize]) {
     match (out, src) {
         (AttributeValue::F32(out_vec), AttributeValue::F32(src_vec)) => {
-            let mean: f32 =
-                indices.iter().map(|&i| src_vec[i]).sum::<f32>() / indices.len() as f32;
+            let mean: f32 = indices.iter().map(|&i| src_vec[i]).sum::<f32>() / indices.len() as f32;
             out_vec.push(mean);
         }
         (AttributeValue::F64(out_vec), AttributeValue::F64(src_vec)) => {
-            let mean: f64 =
-                indices.iter().map(|&i| src_vec[i]).sum::<f64>() / indices.len() as f64;
+            let mean: f64 = indices.iter().map(|&i| src_vec[i]).sum::<f64>() / indices.len() as f64;
             out_vec.push(mean);
         }
         // For integer types, use mode (most common value)
@@ -215,6 +212,18 @@ fn average_attribute_into(out: &mut AttributeValue, src: &AttributeValue, indice
             // Majority vote
             let trues = indices.iter().filter(|&&i| src_vec[i]).count();
             out_vec.push(trues > indices.len() / 2);
+        }
+        (AttributeValue::F32x6(out_vec), AttributeValue::F32x6(src_vec)) => {
+            let mut mean = [0.0f32; 6];
+            for &i in indices {
+                for (j, item) in mean.iter_mut().enumerate() {
+                    *item += src_vec[i][j];
+                }
+            }
+            for item in &mut mean {
+                *item /= indices.len() as f32;
+            }
+            out_vec.push(mean);
         }
         _ => {}
     }
@@ -286,7 +295,12 @@ mod tests {
 
     #[test]
     fn test_voxel_downsample_nearest_to_centroid() {
-        let xyz = vec![[0.1, 0.1, 0.1], [0.2, 0.2, 0.2], [1.1, 1.1, 1.1], [1.2, 1.2, 1.2]];
+        let xyz = vec![
+            [0.1, 0.1, 0.1],
+            [0.2, 0.2, 0.2],
+            [1.1, 1.1, 1.1],
+            [1.2, 1.2, 1.2],
+        ];
         let pc = HighPerformancePointCloud::from_xyz_vec(xyz).unwrap();
         let result = pc
             .voxel_downsample(1.0, &DownsampleStrategy::NearestToCentroid)

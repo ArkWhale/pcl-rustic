@@ -7,7 +7,8 @@ use std::fs;
 
 impl HighPerformancePointCloud {
     pub fn from_las_laz(path: &str) -> Result<Self> {
-        let mut reader = Reader::from_path(path).map_err(|e| format!("cannot read LAS file: {}", e))?;
+        let mut reader =
+            Reader::from_path(path).map_err(|e| format!("cannot read LAS file: {}", e))?;
 
         let mut xyz_vec: Vec<[f32; 3]> = Vec::new();
         let mut intensity_vec: Vec<f32> = Vec::new();
@@ -155,8 +156,8 @@ impl HighPerformancePointCloud {
 
             if let Some(attr) = classification {
                 if let Some(v) = attr.as_u8() {
-                    point.classification = las::point::Classification::new(v[idx])
-                        .unwrap_or_default();
+                    point.classification =
+                        las::point::Classification::new(v[idx]).unwrap_or_default();
                 }
             }
 
