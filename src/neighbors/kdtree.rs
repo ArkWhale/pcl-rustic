@@ -212,4 +212,32 @@ mod tests {
         ids.sort_unstable();
         assert_eq!(ids, vec![0, 1]);
     }
+
+    #[test]
+    fn degenerate_axis_uses_deterministic_fallback() {
+        let xyz: Vec<[f32; 3]> = (0..40).map(|i| [0.0, i as f32, 0.0]).collect();
+        let pc = HighPerformancePointCloud::from_xyz_vec(xyz).unwrap();
+        let index = KdTreeIndex::build(&pc).unwrap();
+        assert!(index.inner.is_none());
+
+        let query = [[0.0, 10.2, 0.0], [0.0, 25.8, 0.0]];
+        let first_knn = index.knn(&query, 3).unwrap();
+        let second_knn = index.knn(&query, 3).unwrap();
+        assert_eq!(hit_ids(&first_knn), hit_ids(&second_knn));
+        assert_eq!(hit_ids(&first_knn), vec![vec![10, 11, 9], vec![26, 25, 27]]);
+
+        let first_radius = index.radius_search(&query, 1.25).unwrap();
+        let second_radius = index.radius_search(&query, 1.25).unwrap();
+        assert_eq!(hit_ids(&first_radius), hit_ids(&second_radius));
+        assert_eq!(
+            hit_ids(&first_radius),
+            vec![vec![10, 11, 9], vec![26, 25, 27]]
+        );
+    }
+
+    fn hit_ids(rows: &[Vec<NeighborHit>]) -> Vec<Vec<u64>> {
+        rows.iter()
+            .map(|row| row.iter().map(|hit| hit.index).collect())
+            .collect()
+    }
 }

@@ -121,6 +121,8 @@ examples, and automation.
 - `KdTreeIndex::build` detects axis buckets over the configured limit and skips
   `kiddo` for those clouds.
 - `knn` and `radius_search` use sorted brute-force queries under fallback.
+- Dedicated fallback tests assert deterministic `knn` and `radius_search`
+  results for degenerate axis-bucket geometry.
 - Plane normal estimation no longer panics on the covered axis-aligned plane
   case.
 - GICP prerequisite errors are implemented and covered by Python tests.
@@ -209,7 +211,6 @@ examples, and automation.
 
 ### RFC-0008
 
-- Dedicated fallback determinism tests for `knn` / `radius_search` are missing.
 - The full covariance-weighted GICP solver remains open by design.
 
 ### RFC-0009
@@ -251,6 +252,9 @@ The RFC-0009 implementation slice also ran focused verification:
     examples/classification_aware_downsample.py`
   - `uv run pytest tests/test_point_cloud.py::TestNeighborsNormalsOutliersRegistration::test_outlier_empty_input_errors tests/test_point_cloud.py::TestNeighborsNormalsOutliersRegistration::test_statistical_outlier_removes_injected_outliers tests/test_point_cloud.py::TestNeighborsNormalsOutliersRegistration::test_outlier_preserves_typed_attributes -v --no-cov`
   - `uv run python examples/classification_aware_downsample.py`
+- RFC-0008 fallback focused checks:
+  - `cargo fmt`
+  - `cargo test degenerate_axis_uses_deterministic_fallback --lib`
 
 Note: a prior local shell did not have `just` installed, so `just test` /
 `just ci` could not be invoked directly in that session. Equivalent steps were
