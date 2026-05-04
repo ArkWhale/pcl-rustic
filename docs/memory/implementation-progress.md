@@ -1,40 +1,42 @@
-# Implementation Progress — RFC 0002-0007
+# Implementation Progress - RFC 0002-0009
 
-## Current Status: RFC-0002/0003/0005/0006/0007 substantially implemented
+## Current Status: API Surface Broadly Present; Acceptance Criteria Still Partial
 
 Last updated: 2026-05-04.
 
-### Commits Made This Session
+This review used read-only subagent audits split across RFC-0002 through RFC-0005
+and RFC-0006 through RFC-0009, plus a local pass over source, tests, docs,
+examples, and automation.
 
-1. `59d5d5a Implement neighbor outlier and registration core`
-   - Added KD-tree wrapper, octree, normal/covariance estimation, SOR/ROR, and registration core.
-2. `2509bef Expose RFC APIs to Python tests and CI`
-   - Exposed Python APIs, updated stubs/exports, added pytest coverage, and changed CI workflows to run `just ci`.
+| RFC | Status | Summary |
+|---|---|---|
+| RFC-0002 API Reset & Typed Attributes | Partial | Typed attributes and new downsample strategies exist, but attributes are host `Vec<T>` storage and zero-copy getters / getter benchmarks are not implemented. |
+| RFC-0003 Coordinate Ops & Selection | Partial | Selection, feature filters, AABB crop, concat, transform wrappers, and examples exist; `select_where`, OBB APIs, LAS-fixture coverage, and device-native selection are missing. |
+| RFC-0004 GPU Hot Path | Mostly missing | Device transfer hooks exist, but voxel downsample, selection, concat, and benchmarks remain CPU/reference paths. |
+| RFC-0005 KD-tree, Octree, Normals | Partial | KD-tree, fallback, octree, Python APIs, normals, and covariance support exist; acceptance-level benchmarks, cache tests, and stronger oracle tests are missing. |
+| RFC-0006 Outlier Removal | Partial | SOR/ROR APIs and masks exist with basic tests/docs; acceptance coverage, same-device mask contract, LAS propagation tests, and 10M benchmark are missing. |
+| RFC-0007 ICP/GICP Registration | Partial | Registration API, point-to-point ICP, evaluate, covariance storage, and prerequisite validation exist; point-to-plane/GICP solvers are staged, not complete. |
+| RFC-0008 KD-tree Fallback & GICP Staging | Mostly implemented | Fallback behavior and staged GICP decision are implemented; full covariance-weighted GICP remains open by design. |
+| RFC-0009 Large-Scale Benchmark Suite | Mostly missing | Existing benchmark file covers older voxel/transform timings; RFC-0009 smoke/standard/full modes, concat matrix, CSV output, and typed benchmark schema are missing. |
 
-### Verified
+## Implemented Evidence
 
-- `cargo test` passes: 16/16 Rust unit tests.
-- `uv run maturin develop` succeeded after cache permission escalation.
-- `uv run pytest tests/test_point_cloud.py -v` passes: 40/40 Python integration tests.
+### RFC-0002 - API Reset & Typed Attributes
 
-Note: local shell does not have `just` installed, so `just test` / `just ci` could not be invoked directly. Equivalent steps were run manually. CI installs `just` before invoking `just ci`.
+- `src/point_cloud/attribute_value.rs` defines `AttributeValue` for `F32`,
+  `F64`, `U8`, `U16`, `U32`, `I32`, `I64`, `Bool`, plus `F32x6`.
+- Intensity and RGB are standard attributes; `HighPerformancePointCloud` has
+  `xyz`, `attributes`, and `kdtree_cache` rather than dedicated intensity/RGB
+  tensor fields.
+- `PointCloud.from_xyz` accepts `float32`, `float64`, `int32`, and `int64`
+  NumPy inputs and stores XYZ as `float32`.
+- `set_attribute()` / `get_attribute()` preserve NumPy dtypes for covered
+  scalar attributes.
+- `DownsampleStrategy.RANDOM_SEEDED`, `NEAREST_TO_CENTROID`, and `AVERAGE`
+  are exposed, and seeded determinism is tested.
+- `pyproject.toml` now points to `README.md`, and RFC docs are in MkDocs nav.
 
-## Implemented By RFC
-
-### RFC-0002 — API Reset & Typed Attributes
-
-- `AttributeValue` supports `F32`, `F64`, `U8`, `U16`, `U32`, `I32`, `I64`, `Bool`.
-- Added `F32x6` for RFC-0007 packed covariance attribute storage.
-- XYZ accepts `float32`, `float64`, `int32`, `int64` NumPy inputs and stores `float32`.
-- Attributes preserve dtype through `set_attribute()` / `get_attribute()`.
-- Voxel strategies exposed as:
-  - `RANDOM_SEEDED`
-  - `NEAREST_TO_CENTROID`
-  - `AVERAGE`
-- Legacy aliases `RANDOM` and `CENTROID` remain.
-- Python `.pyi` and `__init__.py` updated for current API.
-
-### RFC-0003 — Coordinate Ops & Selection
+### RFC-0003 - Coordinate Ops & Selection
 
 - Implemented and exposed:
   - `select(mask)`
@@ -47,25 +49,28 @@ Note: local shell does not have `just` installed, so `just test` / `just ci` cou
   - `aabb()`
   - `PointCloud.concatenate(clouds, policy)`
   - `translate`, `scale`, `rotate`, `rigid_transform`, `transform`
+- `PointCloud.concatenate` supports `strict`, `union`, and `intersection`.
 - Added examples:
   - `examples/split_grid_downsample_concat.py`
   - `examples/classification_aware_downsample.py`
+- `docs/getting-started/examples.md` references both examples.
 
-### RFC-0004 — GPU Hot Path
+### RFC-0004 - GPU Hot Path
 
 - Added device hooks:
   - Rust `HighPerformancePointCloud::to_device(...)`
   - Python `pc.to("cpu" | "gpu")`
   - Python `pc.device()`
-- Transform path continues to use Burn tensors.
-- Full RFC-0004 tensor-native voxel binning / segment-reduce rewrite is **not complete**. Current voxel, selection, and neighbor algorithms remain CPU/reference implementations for correctness.
+- Burn Router backend is configured with WGPU and CPU support.
+- Transform still uses Burn tensors, but the main hot paths are not yet
+  tensor-native.
 
-### RFC-0005 — KD-tree, Octree, Normals
+### RFC-0005 - KD-tree, Octree, Normals
 
-- Added `src/neighbors/`:
-  - `kdtree.rs`
-  - `octree.rs`
-  - `normals.rs`
+- Added neighbor modules:
+  - `src/neighbors/kdtree.rs`
+  - `src/neighbors/octree.rs`
+  - `src/neighbors/normals.rs`
 - Python APIs:
   - `pc.knn(query, k) -> (indices, distances)`
   - `pc.radius_search(query, radius) -> list[np.ndarray]`
@@ -73,17 +78,22 @@ Note: local shell does not have `just` installed, so `just test` / `just ci` cou
   - `octree.range_search(center, radius)`
   - `octree.voxel_centers()`
   - `pc.estimate_normals(NormalSearch.knn/radius/hybrid(...))`
-- KD-tree uses `kiddo` when geometry is suitable.
-- Degenerate geometry fallback is documented in RFC-0008.
+- KD-tree uses `kiddo` when geometry is suitable and falls back to deterministic
+  brute-force queries for degenerate axis buckets.
+- `PointCloud` has a lazy `OnceCell` KD-tree cache.
 
-### RFC-0006 — Outlier Removal
+### RFC-0006 - Outlier Removal
 
 - Implemented:
   - `remove_statistical_outlier(nb_neighbors, std_ratio) -> (cloud, kept_mask)`
   - `remove_radius_outlier(nb_points, radius) -> (cloud, kept_mask)`
-- Rust and Python tests cover synthetic outliers and mask propagation.
+- Python bindings return NumPy boolean masks.
+- Attribute propagation is supported through `AttributeValue::select_mask`.
+- `docs/api/outlier.md` exists.
+- `examples/classification_aware_downsample.py` includes ROR as an optional
+  cleaning step.
 
-### RFC-0007 — ICP/GICP Registration
+### RFC-0007 - ICP/GICP Registration
 
 - Added `src/registration.rs`.
 - Python submodule `pcl_rustic.registration` exposes:
@@ -94,42 +104,147 @@ Note: local shell does not have `just` installed, so `just test` / `just ci` cou
   - `RegistrationResult`
   - `registration.icp(...)`
   - `registration.evaluate(...)`
-- Point-to-point ICP is implemented and tested.
+- Point-to-point ICP is implemented and tested for identity and known
+  translation cases.
 - Point-to-plane validates required target normals.
 - GICP validates required source/target packed covariance attributes.
 - `estimate_covariances(knn)` writes packed `covariance` as `float32[N, 6]`.
-- Full covariance-weighted GICP update is staged; see RFC-0008.
+- `docs/api/registration.md` documents the staged GICP behavior.
 
-## Docs Updated
+### RFC-0008 - KD-tree Fallback & GICP Staging
 
-- Added:
-  - `docs/api/outlier.md`
-  - `docs/api/registration.md`
-  - `docs/plans/rfc-0008-2026-05-04-kdtree-fallback-and-gicp-staging.md`
-- Rewrote:
-  - `docs/api/pointcloud.md`
-  - `docs/api/downsample.md`
-- Updated:
-  - `docs/api/overview.md`
-  - `docs/getting-started/examples.md`
-  - `mkdocs.yml` nav includes RFCs and new API pages.
-- Replaced most stale `YOUR_USERNAME` and deprecated downsample strategy references in docs/README.
+- `KdTreeIndex::build` detects axis buckets over the configured limit and skips
+  `kiddo` for those clouds.
+- `knn` and `radius_search` use sorted brute-force queries under fallback.
+- Plane normal estimation no longer panics on the covered axis-aligned plane
+  case.
+- GICP prerequisite errors are implemented and covered by Python tests.
 
-## Important Open Work
+### RFC-0009 - Large-Scale Benchmark Suite
 
-1. Finish RFC-0004 tensor-native voxel binning and GPU benchmark matrix.
-2. Replace staged GICP update with covariance-weighted plane-to-plane solve.
-3. Implement `crop_obb` / `obb()` if strict RFC-0003 completion is required.
-4. Run full `just ci` in an environment with `just` installed.
-5. Run full docs build after docs dependency sync.
+- `tests/test_benchmark.py` contains existing large Gaussian voxel and transform
+  benchmark tests.
+- `just benchmark` exists for the older benchmark report path.
+- Current benchmark data includes `xyz`, `intensity`, `d1`, and `d2`.
 
-## Architecture Decisions Made
+## Important Gaps By RFC
+
+### RFC-0002
+
+- `AttributeValue` storage is host `Vec<T>`, not the RFC's `Tensor1<Backend, T>`.
+- `get_xyz()` and `attribute_to_numpy()` clone/materialize arrays; the
+  zero-copy getter path is not implemented.
+- No 10M-point getter benchmark or documented 10x speedup.
+- Legacy Python aliases `DownsampleStrategy.RANDOM` and `CENTROID` remain.
+- `multica-home/knowledge/projects/pcl-rustic.md` is not present in this repo.
+
+### RFC-0003
+
+- Generic `select_where` is absent.
+- `crop_obb` and `obb()` are absent.
+- Selection and concat are host-vector implementations, not device-resident
+  tensor gather/cat operations.
+- Tests are synthetic; no `tests/data` LAS fixture was found.
+- Missing or incomplete acceptance tests for empty input, single-cloud concat,
+  intersection policy, and LAS classification round-trip.
+
+### RFC-0004
+
+- Voxel downsample materializes host XYZ and groups points with `HashMap`.
+- `select` and `concatenate` are not implemented with Burn `nonzero`,
+  `select_dim`, or `cat`.
+- No GPU device-residency pipeline test.
+- Benchmark harness is not the RFC backend matrix.
+- No 50M LAZ GPU-vs-CPU 3x speedup evidence.
+- No CPU/GPU golden tests for point counts, centroids, or seeded randomness.
+
+### RFC-0005
+
+- KD-tree tests are small fixed cases, not 10k random clouds against brute force.
+- KD-tree cache behavior is implemented but not acceptance-tested for no-rebuild
+  or mutation invalidation.
+- Octree `range_search` currently brute-forces over all XYZ rather than pruning
+  via octree cells.
+- Normal estimation is not parallelized with `rayon`.
+- No 10M-point kNN benchmark result in `docs/performance/benchmarks.md`.
+
+### RFC-0006
+
+- Rust returns `Vec<bool>` masks, not same-device `Tensor1<Backend, bool>`.
+- Tests are lighter than acceptance criteria: no Gaussian injected-outlier test,
+  empty-input test, `kept_mask.sum() == pc_clean.point_count()` assertion, or
+  LAS round-trip propagation test.
+- No SOR 10M benchmark evidence.
+- Docs do not yet include detailed `std_ratio=2.0` vs `3.0` tuning guidance.
+- Classification-aware example includes ROR only, not both SOR and ROR.
+
+### RFC-0007
+
+- Point-to-plane and GICP are API-staged; they validate prerequisites but reuse
+  the point-to-point closed-form update.
+- Full covariance-weighted GICP plane-to-plane solve is not implemented.
+- Known-rotation 10k recovery test is missing.
+- Open3D Bunny comparison test is missing.
+- 500k-vs-500k registration benchmark is missing.
+- `icp` computes result metrics using correspondences from before applying the
+  latest delta while returning the updated transform; this should be reviewed
+  before relying on convergence metrics.
+
+### RFC-0008
+
+- Dedicated fallback determinism tests for `knn` / `radius_search` are missing.
+- The full covariance-weighted GICP solver remains open by design.
+
+### RFC-0009
+
+- No `smoke`, `standard`, or `full` benchmark modes.
+- Missing `just benchmark-smoke`, `just benchmark-standard`, and
+  `just benchmark-full`.
+- No concat benchmark matrix for 20-200 clouds x 10M points.
+- Downsampling matrix does not match RFC-0009 sizes, voxel sizes, or strategies.
+- No CSV writer to `reports/benchmarks/`.
+- `docs/performance/benchmarks.md` appears static, not generated from benchmark
+  CSV output.
+- Benchmark generator lacks required typed attrs: `classification`,
+  `return_number`, and `gps_time`.
+
+## Verification Snapshot
+
+Previous session evidence recorded:
+
+- `cargo test` passed: 16/16 Rust unit tests.
+- `uv run maturin develop` succeeded after cache permission escalation.
+- `uv run pytest tests/test_point_cloud.py -v` passed: 40/40 Python integration
+  tests.
+
+This review did not rerun the test suite. The subagent audits were read-only,
+and the local update only edited this memory document.
+
+Note: a prior local shell did not have `just` installed, so `just test` /
+`just ci` could not be invoked directly in that session. Equivalent steps were
+run manually then. CI installs `just` before invoking `just ci`.
+
+## Next Implementation Priorities
+
+1. Finish RFC-0004 tensor-native voxel binning, selection, concat, and GPU
+   benchmark matrix.
+2. Replace staged point-to-plane/GICP updates with their actual solvers and add
+   the required comparison/scale tests.
+3. Implement RFC-0009 benchmark modes, concat matrix, CSV output, and generated
+   docs.
+4. Close strict RFC-0003 gaps: `select_where`, `crop_obb`, `obb()`, LAS fixture
+   tests, and stronger concat coverage.
+5. Decide whether RFC-0002 should remain host-typed attributes by design or move
+   to literal tensor-backed typed attributes and zero-copy getters.
+6. Strengthen RFC-0005/RFC-0006 acceptance tests and publish the required
+   benchmark results.
+
+## Architecture Decisions Recorded
 
 | Decision | Rationale |
 |---|---|
-| `AttributeValue` uses `Vec<T>` for typed attrs | Burn Router backend does not carry all LAS attribute dtypes directly. |
+| `AttributeValue` currently uses host `Vec<T>` for typed attrs | Burn Router backend does not carry all LAS attribute dtypes directly; this diverges from RFC-0002's literal tensor-storage wording. |
 | Added `F32x6` packed covariance variant | RFC-0007 needs `[N, 6]` covariance storage while preserving typed attribute boundary. |
 | KD-tree falls back to brute-force on degenerate axis buckets | `kiddo` can panic on many identical values along an axis; fallback preserves correctness. |
 | GICP API staged behind covariance validation | Keeps RFC API usable while avoiding an unverified covariance-weighted solver. |
 | `just ci` no longer depends on pre-commit | CI should use pytest/cargo directly per user instruction; pre-commit remains separately available. |
-
