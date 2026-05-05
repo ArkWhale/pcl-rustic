@@ -123,6 +123,9 @@ examples, and automation.
   - `registration.evaluate(...)`
 - Point-to-point ICP is implemented and tested for identity and known
   translation cases.
+- ICP now recomputes correspondences after each accepted delta before returning
+  iteration metrics, so `fitness`, `inlier_rmse`, and correspondence sets
+  describe the returned transform.
 - Point-to-plane validates required target normals.
 - GICP validates required source/target packed covariance attributes.
 - `estimate_covariances(knn)` writes packed `covariance` as `float32[N, 6]`.
@@ -216,9 +219,6 @@ examples, and automation.
 - Known-rotation 10k recovery test is missing.
 - Open3D Bunny comparison test is missing.
 - 500k-vs-500k registration benchmark is missing.
-- `icp` computes result metrics using correspondences from before applying the
-  latest delta while returning the updated transform; this should be reviewed
-  before relying on convergence metrics.
 
 ### RFC-0008
 
@@ -266,6 +266,14 @@ Fresh verification from the 2026-05-05 RFC-0002 empty-attribute validation pass:
 
 - Red check before implementation: `uv run pytest tests/test_point_cloud.py::TestPointCloudProperties::test_empty_point_cloud_rejects_non_empty_attribute -q --no-cov` failed because no `ValueError` was raised.
 - Green focused check after implementation: `uv run pytest tests/test_point_cloud.py::TestPointCloudProperties::test_empty_point_cloud_rejects_non_empty_attribute -q --no-cov` passed.
+
+Fresh verification from the 2026-05-05 RFC-0007 ICP metric consistency pass:
+
+- Red check before implementation: `cargo test single_iteration_metrics_match_returned_transform --lib` failed because one-iteration ICP returned non-zero RMSE for the already-updated transform.
+- Green checks after implementation:
+  - `cargo test single_iteration_metrics_match_returned_transform --lib` passed.
+  - `cargo test registration::tests --lib` passed: 4/4 registration unit tests.
+  - `cargo test --lib` passed: 18/18 Rust unit tests. Rust emitted existing dead-code warnings.
 
 Fresh verification from the 2026-05-04 cleanup pass:
 

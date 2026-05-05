@@ -112,7 +112,10 @@ pub fn icp(
         // point-to-point closed form as a stable baseline.
         let delta = estimate_point_to_point_delta(&transformed, &target_xyz, &correspondences)?;
         transformation = delta * transformation;
-        last = metrics(source_xyz.len(), transformation, correspondences)?;
+        let updated = transform_points(&source_xyz, &transformation);
+        let updated_correspondences =
+            find_correspondences(target, &updated, max_correspondence_distance)?;
+        last = metrics(source_xyz.len(), transformation, updated_correspondences)?;
 
         let fitness_delta = if previous_fitness.is_finite() {
             (last.fitness - previous_fitness).abs()
@@ -308,6 +311,30 @@ mod tests {
         assert!((result.transformation[(0, 3)] - 0.02).abs() < 1e-3);
         assert!((result.transformation[(1, 3)] + 0.03).abs() < 1e-3);
         assert!((result.transformation[(2, 3)] - 0.01).abs() < 1e-3);
+    }
+
+    #[test]
+    fn single_iteration_metrics_match_returned_transform() {
+        let source = sparse_cloud();
+        let target = source.translate([0.02, -0.03, 0.01]).unwrap();
+        let result = icp(
+            &source,
+            &target,
+            0.2,
+            Matrix4::identity(),
+            TransformationEstimation::PointToPoint,
+            ICPConvergenceCriteria {
+                max_iteration: 1,
+                relative_fitness: 0.0,
+                relative_rmse: 0.0,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.fitness, 1.0);
+        assert!(result.inlier_rmse < 1e-4);
+        let score = evaluate(&source, &target, 0.2, result.transformation).unwrap();
+        assert!((result.inlier_rmse - score.inlier_rmse).abs() < 1e-6);
     }
 
     #[test]
