@@ -143,7 +143,7 @@ Early-exit diagnostic: log at `info` level which criterion triggered termination
 - [ ] `PointCloud::estimate_covariances(knn)` implemented and tested.
 - [ ] Unit tests:
   - Identity registration: source = target = random cloud, `icp` with init = identity converges in one iteration, `transformation ≈ I`, `fitness == 1`.
-  - Known-rotation recovery: apply a known 4×4 `T_gt` to a 10k-point fixture, register back with init = noisy identity, assert `‖T_recovered · T_gt − I‖_F < 1e-3`.
+  - Known-rotation recovery: apply a known 4×4 `T_gt` to a 10k-point fixture, register back with init = noisy identity, assert `‖T_recovered · T_gt − I‖_F < 1e-3`. Covered for the current point-to-point solver with identity init.
   - Point-to-Plane requires normals: without `estimate_normals` first, returns a clear error.
   - GICP requires covariances: without `estimate_covariances` first, returns a clear error.
 - [ ] Comparison test against Open3D: on a bundled 5000-point Bunny fixture, `fitness` and `inlier_rmse` agree with Open3D's `registration_icp` within 1% after 30 iterations (same `max_correspondence_distance`, same init, same estimator).

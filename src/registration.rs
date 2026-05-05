@@ -249,6 +249,8 @@ fn transform_points(points: &[[f32; 3]], transformation: &Matrix4<f32>) -> Vec<[
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::{Rng, SeedableRng};
+    use rand_chacha::ChaCha8Rng;
 
     fn grid_cloud() -> HighPerformancePointCloud {
         let mut xyz = Vec::new();
@@ -311,6 +313,60 @@ mod tests {
         assert!((result.transformation[(0, 3)] - 0.02).abs() < 1e-3);
         assert!((result.transformation[(1, 3)] + 0.03).abs() < 1e-3);
         assert!((result.transformation[(2, 3)] - 0.01).abs() < 1e-3);
+    }
+
+    #[test]
+    fn known_rotation_10k_is_recovered() {
+        let mut rng = ChaCha8Rng::seed_from_u64(99);
+        let xyz: Vec<[f32; 3]> = (0..10_000)
+            .map(|_| {
+                [
+                    rng.gen_range(-1.0..1.0),
+                    rng.gen_range(-1.0..1.0),
+                    rng.gen_range(-1.0..1.0),
+                ]
+            })
+            .collect();
+        let target = HighPerformancePointCloud::from_xyz_vec(xyz).unwrap();
+        let angle = 0.03f32;
+        let c = angle.cos();
+        let s = angle.sin();
+        let rotation = [[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]];
+        let translation = [0.02, -0.015, 0.01];
+        let source = target.rigid_transform(&rotation, translation).unwrap();
+
+        let mut t_gt = Matrix4::identity();
+        t_gt.fixed_view_mut::<3, 3>(0, 0).copy_from(&Matrix3::new(
+            rotation[0][0],
+            rotation[0][1],
+            rotation[0][2],
+            rotation[1][0],
+            rotation[1][1],
+            rotation[1][2],
+            rotation[2][0],
+            rotation[2][1],
+            rotation[2][2],
+        ));
+        t_gt[(0, 3)] = translation[0];
+        t_gt[(1, 3)] = translation[1];
+        t_gt[(2, 3)] = translation[2];
+
+        let result = icp(
+            &source,
+            &target,
+            0.15,
+            Matrix4::identity(),
+            TransformationEstimation::PointToPoint,
+            ICPConvergenceCriteria {
+                max_iteration: 30,
+                relative_fitness: 1e-7,
+                relative_rmse: 1e-7,
+            },
+        )
+        .unwrap();
+
+        assert!(result.fitness > 0.99);
+        assert!((result.transformation * t_gt - Matrix4::identity()).norm() < 1e-3);
     }
 
     #[test]

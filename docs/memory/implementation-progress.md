@@ -131,7 +131,7 @@ examples, and automation.
   - `registration.icp(...)`
   - `registration.evaluate(...)`
 - Point-to-point ICP is implemented and tested for identity and known
-  translation cases.
+  translation cases, plus a 10k-point known-rotation recovery case.
 - ICP now recomputes correspondences after each accepted delta before returning
   iteration metrics, so `fitness`, `inlier_rmse`, and correspondence sets
   describe the returned transform.
@@ -224,7 +224,6 @@ examples, and automation.
 - Point-to-plane and GICP are API-staged; they validate prerequisites but reuse
   the point-to-point closed-form update.
 - Full covariance-weighted GICP plane-to-plane solve is not implemented.
-- Known-rotation 10k recovery test is missing.
 - Open3D Bunny comparison test is missing.
 - 500k-vs-500k registration benchmark is missing.
 
@@ -294,6 +293,10 @@ Fresh verification from the 2026-05-05 RFC-0005 neighbor-oracle pass:
 - Green focused checks after test fix:
   - `cargo test random_10k_queries_match_bruteforce_oracle --lib` passed.
   - `cargo test random_10k_range_search_matches_bruteforce_oracle --lib` passed.
+
+Fresh verification from the 2026-05-05 RFC-0007 known-rotation pass:
+
+- `cargo test known_rotation_10k_is_recovered --lib` passed.
 
 Fresh verification from the 2026-05-04 cleanup pass:
 
