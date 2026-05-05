@@ -183,6 +183,8 @@ impl HighPerformancePointCloud {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::{Rng, SeedableRng};
+    use rand_chacha::ChaCha8Rng;
 
     #[test]
     fn knn_matches_expected_order() {
@@ -233,6 +235,70 @@ mod tests {
             hit_ids(&first_radius),
             vec![vec![10, 11, 9], vec![26, 25, 27]]
         );
+    }
+
+    #[test]
+    fn random_10k_queries_match_bruteforce_oracle() {
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let xyz: Vec<[f32; 3]> = (0..10_000)
+            .map(|_| {
+                [
+                    rng.gen_range(-1000.0..1000.0),
+                    rng.gen_range(-1000.0..1000.0),
+                    rng.gen_range(-1000.0..1000.0),
+                ]
+            })
+            .collect();
+        let query: Vec<[f32; 3]> = (0..128)
+            .map(|_| {
+                [
+                    rng.gen_range(-1000.0..1000.0),
+                    rng.gen_range(-1000.0..1000.0),
+                    rng.gen_range(-1000.0..1000.0),
+                ]
+            })
+            .collect();
+        let pc = HighPerformancePointCloud::from_xyz_vec(xyz.clone()).unwrap();
+        let index = KdTreeIndex::build(&pc).unwrap();
+
+        let knn = index.knn(&query, 8).unwrap();
+        for (actual, point) in knn.iter().zip(query.iter()) {
+            let expected = brute_force_knn(&xyz, point, 8);
+            assert_eq!(
+                actual.iter().map(|hit| hit.index).collect::<Vec<_>>(),
+                expected.iter().map(|hit| hit.index).collect::<Vec<_>>()
+            );
+        }
+
+        let radius = 125.0;
+        let radius_hits = index.radius_search(&query, radius).unwrap();
+        for (actual, point) in radius_hits.iter().zip(query.iter()) {
+            let mut actual_ids: Vec<u64> = actual.iter().map(|hit| hit.index).collect();
+            let mut expected_ids: Vec<u64> = brute_force_radius(&xyz, point, radius)
+                .iter()
+                .map(|hit| hit.index)
+                .collect();
+            actual_ids.sort_unstable();
+            expected_ids.sort_unstable();
+            assert_eq!(actual_ids, expected_ids);
+        }
+    }
+
+    #[test]
+    fn empty_and_non_finite_clouds_return_errors() {
+        let empty = HighPerformancePointCloud::new();
+        match empty.kdtree() {
+            Ok(_) => panic!("empty cloud unexpectedly built a KD-tree"),
+            Err(err) => assert!(err.to_string().contains("empty")),
+        }
+
+        let non_finite =
+            HighPerformancePointCloud::from_xyz_vec(vec![[0.0, 0.0, 0.0], [f32::NAN, 1.0, 2.0]])
+                .unwrap();
+        match non_finite.kdtree() {
+            Ok(_) => panic!("non-finite cloud unexpectedly built a KD-tree"),
+            Err(err) => assert!(err.to_string().contains("non-finite")),
+        }
     }
 
     fn hit_ids(rows: &[Vec<NeighborHit>]) -> Vec<Vec<u64>> {

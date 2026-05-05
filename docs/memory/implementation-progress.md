@@ -13,7 +13,7 @@ examples, and automation.
 | RFC-0002 API Reset & Typed Attributes | Partial | Typed attributes and new downsample strategies exist, but attributes are host `Vec<T>` storage and zero-copy getters / getter benchmarks are not implemented. |
 | RFC-0003 Coordinate Ops & Selection | Partial | Selection, generic attribute filters, AABB/OBB crop, concat, transform wrappers, examples, and LAS standard-attribute round-trip coverage exist; fixture-backed examples and device-native selection are still missing. |
 | RFC-0004 GPU Hot Path | Mostly missing | Device transfer hooks exist, but voxel downsample, selection, concat, and benchmarks remain CPU/reference paths. |
-| RFC-0005 KD-tree, Octree, Normals | Partial | KD-tree, fallback, octree, Python APIs, normals, and covariance support exist; acceptance-level benchmarks, cache tests, and stronger oracle tests are missing. |
+| RFC-0005 KD-tree, Octree, Normals | Partial | KD-tree, fallback, octree, Python APIs, normals, covariance support, and 10k brute-force oracle tests exist; cache tests, pruning, parallel normals, and benchmarks are still missing. |
 | RFC-0006 Outlier Removal | Partial | SOR/ROR APIs, masks, docs, synthetic acceptance tests, typed attribute propagation, and LAS standard-attribute propagation coverage exist; same-device mask contract, custom LAS ExtraBytes propagation, and 10M benchmark are missing. |
 | RFC-0007 ICP/GICP Registration | Partial | Registration API, point-to-point ICP, evaluate, covariance storage, and prerequisite validation exist; point-to-plane/GICP solvers are staged, not complete. |
 | RFC-0008 KD-tree Fallback & GICP Staging | Mostly implemented | Fallback behavior and staged GICP decision are implemented; full covariance-weighted GICP remains open by design. |
@@ -99,6 +99,10 @@ examples, and automation.
 - KD-tree uses `kiddo` when geometry is suitable and falls back to deterministic
   brute-force queries for degenerate axis buckets.
 - `PointCloud` has a lazy `OnceCell` KD-tree cache.
+- KD-tree kNN/radius search and octree range search now have deterministic
+  10k-point random-cloud oracle tests against brute force.
+- Empty KD-tree/octree input errors and non-finite KD-tree input errors are
+  covered.
 
 ### RFC-0006 - Outlier Removal
 
@@ -202,11 +206,10 @@ examples, and automation.
 
 ### RFC-0005
 
-- KD-tree tests are small fixed cases, not 10k random clouds against brute force.
 - KD-tree cache behavior is implemented but not acceptance-tested for no-rebuild
   or mutation invalidation.
 - Octree `range_search` currently brute-forces over all XYZ rather than pruning
-  via octree cells.
+  via octree cells, though correctness is covered by a 10k brute-force oracle.
 - Normal estimation is not parallelized with `rayon`.
 - No 10M-point kNN benchmark result in `docs/performance/benchmarks.md`.
 
@@ -284,6 +287,13 @@ Fresh verification from the 2026-05-05 RFC-0003/RFC-0006 LAS round-trip pass:
 
 - Red check before implementation: `uv run pytest tests/test_point_cloud.py::TestTableIo::test_las_classification_selection_and_outlier_round_trip -q --no-cov` failed because `from_las` reloaded zero points from a file whose writer header had not been finalized.
 - Green focused check after implementation: `uv run pytest tests/test_point_cloud.py::TestTableIo::test_las_classification_selection_and_outlier_round_trip -q --no-cov` passed.
+
+Fresh verification from the 2026-05-05 RFC-0005 neighbor-oracle pass:
+
+- First check after adding tests: `cargo test random_10k_queries_match_bruteforce_oracle --lib` and `cargo test random_10k_range_search_matches_bruteforce_oracle --lib` initially failed to compile because `unwrap_err()` required debug formatting for success types. The tests were adjusted to pattern-match errors directly.
+- Green focused checks after test fix:
+  - `cargo test random_10k_queries_match_bruteforce_oracle --lib` passed.
+  - `cargo test random_10k_range_search_matches_bruteforce_oracle --lib` passed.
 
 Fresh verification from the 2026-05-04 cleanup pass:
 

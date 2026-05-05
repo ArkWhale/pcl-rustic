@@ -99,6 +99,8 @@ fn squared_distance(a: &[f32; 3], b: &[f32; 3]) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::{Rng, SeedableRng};
+    use rand_chacha::ChaCha8Rng;
 
     #[test]
     fn range_search_matches_bruteforce_case() {
@@ -114,5 +116,50 @@ mod tests {
             vec![0, 1]
         );
         assert!(!octree.voxel_centers().is_empty());
+    }
+
+    #[test]
+    fn random_10k_range_search_matches_bruteforce_oracle() {
+        let mut rng = ChaCha8Rng::seed_from_u64(7);
+        let xyz: Vec<[f32; 3]> = (0..10_000)
+            .map(|_| {
+                [
+                    rng.gen_range(-500.0..500.0),
+                    rng.gen_range(-500.0..500.0),
+                    rng.gen_range(-500.0..500.0),
+                ]
+            })
+            .collect();
+        let pc = HighPerformancePointCloud::from_xyz_vec(xyz.clone()).unwrap();
+        let octree = pc.octree(8).unwrap();
+
+        for _ in 0..64 {
+            let center = [
+                rng.gen_range(-500.0..500.0),
+                rng.gen_range(-500.0..500.0),
+                rng.gen_range(-500.0..500.0),
+            ];
+            let radius = 75.0;
+            let mut actual = octree.range_search(&center, radius).unwrap();
+            let r2 = radius * radius;
+            let mut expected: Vec<u64> = xyz
+                .iter()
+                .enumerate()
+                .filter(|(_, point)| squared_distance(point, &center) <= r2)
+                .map(|(idx, _)| idx as u64)
+                .collect();
+            actual.sort_unstable();
+            expected.sort_unstable();
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn empty_cloud_returns_error() {
+        let empty = HighPerformancePointCloud::new();
+        match empty.octree(4) {
+            Ok(_) => panic!("empty cloud unexpectedly built an octree"),
+            Err(err) => assert!(err.to_string().contains("empty")),
+        }
     }
 }
