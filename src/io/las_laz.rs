@@ -194,6 +194,7 @@ impl HighPerformancePointCloud {
             writer.write_point(point).map_err(|e| e.to_string())?;
         }
 
+        writer.close().map_err(|e| e.to_string())?;
         Ok(())
     }
 

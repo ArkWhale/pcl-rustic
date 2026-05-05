@@ -556,6 +556,68 @@ class TestNeighborsNormalsOutliersRegistration:
 
 
 class TestTableIo:
+    def test_las_classification_selection_and_outlier_round_trip(self, tmp_path):
+        xyz = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [0.1, 0.0, 0.0],
+                [1.0, 1.0, 1.0],
+                [1.1, 1.0, 1.0],
+                [10.0, 10.0, 10.0],
+            ],
+            dtype=np.float32,
+        )
+        classification = np.array([2, 2, 6, 6, 7], dtype=np.uint8)
+        return_number = np.array([1, 1, 2, 2, 1], dtype=np.uint8)
+        number_of_returns = np.array([1, 1, 2, 2, 1], dtype=np.uint8)
+        gps_time = np.array([100.0, 101.0, 200.0, 201.0, 999.0], dtype=np.float64)
+        rgb = np.array(
+            [[10, 20, 30], [11, 21, 31], [40, 50, 60], [41, 51, 61], [200, 210, 220]],
+            dtype=np.uint8,
+        )
+
+        pc = PointCloud.from_xyz(xyz)
+        pc.set_attribute("classification", classification)
+        pc.set_attribute("return_number", return_number)
+        pc.set_attribute("number_of_returns", number_of_returns)
+        pc.set_attribute("gps_time", gps_time)
+        pc.set_rgb(rgb[:, 0], rgb[:, 1], rgb[:, 2])
+
+        selected = pc.select_by_classification([2, 6])
+        first_path = tmp_path / "selected.las"
+        selected.to_las(str(first_path))
+        reloaded = PointCloud.from_las(str(first_path))
+
+        np.testing.assert_array_equal(
+            reloaded.get_attribute("classification"), classification[:4]
+        )
+        np.testing.assert_array_equal(
+            reloaded.get_attribute("return_number"), return_number[:4]
+        )
+        np.testing.assert_array_equal(
+            reloaded.get_attribute("number_of_returns"), number_of_returns[:4]
+        )
+        np.testing.assert_allclose(reloaded.get_attribute("gps_time"), gps_time[:4])
+        np.testing.assert_array_equal(reloaded.get_rgb()[0], rgb[:4, 0])
+
+        filtered, mask = reloaded.remove_radius_outlier(nb_points=1, radius=0.2)
+        second_path = tmp_path / "filtered.las"
+        filtered.to_las(str(second_path))
+        filtered_reloaded = PointCloud.from_las(str(second_path))
+
+        np.testing.assert_array_equal(
+            filtered_reloaded.get_attribute("classification"),
+            reloaded.get_attribute("classification")[mask],
+        )
+        np.testing.assert_array_equal(
+            filtered_reloaded.get_attribute("return_number"),
+            reloaded.get_attribute("return_number")[mask],
+        )
+        np.testing.assert_allclose(
+            filtered_reloaded.get_attribute("gps_time"),
+            reloaded.get_attribute("gps_time")[mask],
+        )
+
     def test_csv_and_parquet_round_trip(self, tmp_path):
         xyz = np.array(
             [[0.0, 1.0, 2.0], [3.0, 4.0, 5.0], [6.0, 7.0, 8.0]],

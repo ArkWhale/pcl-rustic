@@ -86,7 +86,7 @@ Open3D ships no defaults (all args required). We match that — no silent defaul
   - Empty input → error, not panic.
   - `kept_mask.sum() == pc_clean.point_count()`.
 - [ ] Benchmark: SOR on a 10M-point cloud with `nb_neighbors=20` completes in < 30 s on the reference machine (dominated by kNN queries).
-- [ ] Attribute propagation: intensity, RGB, classification, custom attributes all survive correctly (tested via a LAS round-trip + outlier step + comparison). Synthetic typed-attribute propagation coverage exists; LAS round-trip coverage remains open.
+- [ ] Attribute propagation: intensity, RGB, classification, custom attributes all survive correctly (tested via a LAS round-trip + outlier step + comparison). Synthetic typed-attribute propagation coverage exists, and LAS round-trip coverage now covers standard LAS attributes; custom attributes via LAS ExtraBytes remain open.
 - [x] Documentation page `docs/api/outlier.md` ships with worked examples and parameter-tuning guidance (what `std_ratio=2.0` vs `3.0` does).
 - [x] Both functions included in the classification-aware pipeline example from RFC-0003 as an optional cleaning step.
 

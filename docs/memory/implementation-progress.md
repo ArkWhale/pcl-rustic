@@ -11,10 +11,10 @@ examples, and automation.
 | RFC | Status | Summary |
 |---|---|---|
 | RFC-0002 API Reset & Typed Attributes | Partial | Typed attributes and new downsample strategies exist, but attributes are host `Vec<T>` storage and zero-copy getters / getter benchmarks are not implemented. |
-| RFC-0003 Coordinate Ops & Selection | Partial | Selection, generic attribute filters, AABB/OBB crop, concat, transform wrappers, and examples exist; LAS-fixture coverage and device-native selection are still missing. |
+| RFC-0003 Coordinate Ops & Selection | Partial | Selection, generic attribute filters, AABB/OBB crop, concat, transform wrappers, examples, and LAS standard-attribute round-trip coverage exist; fixture-backed examples and device-native selection are still missing. |
 | RFC-0004 GPU Hot Path | Mostly missing | Device transfer hooks exist, but voxel downsample, selection, concat, and benchmarks remain CPU/reference paths. |
 | RFC-0005 KD-tree, Octree, Normals | Partial | KD-tree, fallback, octree, Python APIs, normals, and covariance support exist; acceptance-level benchmarks, cache tests, and stronger oracle tests are missing. |
-| RFC-0006 Outlier Removal | Partial | SOR/ROR APIs, masks, docs, synthetic acceptance tests, and typed attribute propagation coverage exist; same-device mask contract, LAS propagation tests, and 10M benchmark are missing. |
+| RFC-0006 Outlier Removal | Partial | SOR/ROR APIs, masks, docs, synthetic acceptance tests, typed attribute propagation, and LAS standard-attribute propagation coverage exist; same-device mask contract, custom LAS ExtraBytes propagation, and 10M benchmark are missing. |
 | RFC-0007 ICP/GICP Registration | Partial | Registration API, point-to-point ICP, evaluate, covariance storage, and prerequisite validation exist; point-to-plane/GICP solvers are staged, not complete. |
 | RFC-0008 KD-tree Fallback & GICP Staging | Mostly implemented | Fallback behavior and staged GICP decision are implemented; full covariance-weighted GICP remains open by design. |
 | RFC-0009 Large-Scale Benchmark Suite | Mostly implemented | Smoke/standard/full modes, concat/downsample matrices, typed attrs, CSV output, just recipes, CI smoke job, and docs regeneration support are implemented; standard/full benchmark runs remain unexecuted. |
@@ -65,6 +65,9 @@ examples, and automation.
 - Empty selections now preserve typed attribute schemas, zero-point XYZ tensors
   use the CPU backend to avoid WGPU zero-size resource panics, and strict concat
   can round-trip an empty selected partition with a non-empty cloud.
+- LAS export now explicitly finalizes the writer header, and tests cover
+  `select_by_classification([2, 6]) -> to_las -> from_las` with classification,
+  return-number, GPS time, and RGB preservation.
 - Added examples:
   - `examples/split_grid_downsample_concat.py`
   - `examples/classification_aware_downsample.py`
@@ -106,6 +109,8 @@ examples, and automation.
 - Attribute propagation is supported through `AttributeValue::select_mask`.
 - Tests cover empty-input errors, injected isolated SOR outliers, mask sum
   consistency, and typed attribute propagation through ROR.
+- LAS round-trip coverage verifies that standard LAS attributes survive
+  selection, radius outlier removal, LAS export, and reload.
 - `docs/api/outlier.md` exists.
 - `examples/classification_aware_downsample.py` includes SOR and ROR as optional
   cleaning steps.
@@ -183,7 +188,7 @@ examples, and automation.
 - Selection and concat are host-vector implementations, not device-resident
   tensor gather/cat operations.
 - Tests are synthetic; no `tests/data` LAS fixture was found.
-- LAS classification round-trip coverage is still missing.
+- End-to-end examples are not fixture-backed.
 
 ### RFC-0004
 
@@ -208,7 +213,7 @@ examples, and automation.
 ### RFC-0006
 
 - Rust returns `Vec<bool>` masks, not same-device `Tensor1<Backend, bool>`.
-- LAS round-trip propagation test is still missing.
+- LAS ExtraBytes/custom-attribute propagation is still missing.
 - No SOR 10M benchmark evidence.
 
 ### RFC-0007
@@ -275,6 +280,11 @@ Fresh verification from the 2026-05-05 RFC-0007 ICP metric consistency pass:
   - `cargo test registration::tests --lib` passed: 4/4 registration unit tests.
   - `cargo test --lib` passed: 18/18 Rust unit tests. Rust emitted existing dead-code warnings.
 
+Fresh verification from the 2026-05-05 RFC-0003/RFC-0006 LAS round-trip pass:
+
+- Red check before implementation: `uv run pytest tests/test_point_cloud.py::TestTableIo::test_las_classification_selection_and_outlier_round_trip -q --no-cov` failed because `from_las` reloaded zero points from a file whose writer header had not been finalized.
+- Green focused check after implementation: `uv run pytest tests/test_point_cloud.py::TestTableIo::test_las_classification_selection_and_outlier_round_trip -q --no-cov` passed.
+
 Fresh verification from the 2026-05-04 cleanup pass:
 
 - `cargo test --lib` passed: 17/17 Rust unit tests. Rust emitted existing
@@ -337,8 +347,8 @@ run manually then. CI installs `just` before invoking `just ci`.
    benchmark matrix.
 2. Replace staged point-to-plane/GICP updates with their actual solvers and add
    the required comparison/scale tests.
-3. Close remaining strict RFC-0003 gaps: LAS fixture tests, LAS classification
-   round-trip, and device-native selection.
+3. Close remaining strict RFC-0003 gaps: fixture-backed examples and
+   device-native selection.
 4. Decide whether RFC-0002 should remain host-typed attributes by design or move
    to literal tensor-backed typed attributes and zero-copy getters.
 5. Strengthen RFC-0005/RFC-0006 acceptance tests and publish the required
