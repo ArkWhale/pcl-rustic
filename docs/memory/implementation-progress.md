@@ -2,7 +2,7 @@
 
 ## Current Status: API Surface Broadly Present; Acceptance Criteria Still Partial
 
-Last updated: 2026-05-04.
+Last updated: 2026-05-05.
 
 This review used read-only subagent audits split across RFC-0002 through RFC-0005
 and RFC-0006 through RFC-0009, plus a local pass over source, tests, docs,
@@ -60,6 +60,9 @@ examples, and automation.
 - `PointCloud.concatenate` supports `strict`, `union`, and `intersection`.
 - Tests cover single-cloud concat, intersection policy, missing-attribute strict
   rejection, and dtype-mismatch strict rejection.
+- Empty selections now preserve typed attribute schemas, zero-point XYZ tensors
+  use the CPU backend to avoid WGPU zero-size resource panics, and strict concat
+  can round-trip an empty selected partition with a non-empty cloud.
 - Added examples:
   - `examples/split_grid_downsample_concat.py`
   - `examples/classification_aware_downsample.py`
@@ -175,8 +178,6 @@ examples, and automation.
 - Selection and concat are host-vector implementations, not device-resident
   tensor gather/cat operations.
 - Tests are synthetic; no `tests/data` LAS fixture was found.
-- Empty concat/select still needs a backend-safe zero-point path; current WGPU
-  backend can panic on zero-size resources.
 - LAS classification round-trip coverage is still missing.
 
 ### RFC-0004
@@ -250,6 +251,15 @@ examples, and automation.
 
 ## Verification Snapshot
 
+Fresh verification from the 2026-05-05 RFC-0003 empty-selection pass:
+
+- Red check before implementation: `uv run pytest tests/test_point_cloud.py::TestSelectionAndConcatenation::test_empty_selection_preserves_attribute_schema_for_strict_concat -q --no-cov` failed with a WGPU `0 size resources are not yet supported` panic.
+- Green focused checks after implementation:
+  - `uv run pytest tests/test_point_cloud.py::TestSelectionAndConcatenation::test_empty_selection_preserves_attribute_schema_for_strict_concat -q --no-cov` passed.
+  - `uv run ruff check tests/test_point_cloud.py` passed.
+  - `cargo test --lib` passed: 17/17 Rust unit tests. Rust emitted existing dead-code warnings.
+  - `uv run pytest tests/test_point_cloud.py::TestSelectionAndConcatenation -q --no-cov` passed: 4/4 Python selection/concat tests.
+
 Fresh verification from the 2026-05-04 cleanup pass:
 
 - `cargo test --lib` passed: 17/17 Rust unit tests. Rust emitted existing
@@ -312,9 +322,8 @@ run manually then. CI installs `just` before invoking `just ci`.
    benchmark matrix.
 2. Replace staged point-to-plane/GICP updates with their actual solvers and add
    the required comparison/scale tests.
-3. Close remaining strict RFC-0003 gaps: LAS fixture tests, empty input /
-   zero-point backend handling, LAS classification round-trip, and device-native
-   selection.
+3. Close remaining strict RFC-0003 gaps: LAS fixture tests, LAS classification
+   round-trip, and device-native selection.
 4. Decide whether RFC-0002 should remain host-typed attributes by design or move
    to literal tensor-backed typed attributes and zero-copy getters.
 5. Strengthen RFC-0005/RFC-0006 acceptance tests and publish the required

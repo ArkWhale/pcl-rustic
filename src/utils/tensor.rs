@@ -50,7 +50,7 @@ pub fn cpu_device() -> BackendDevice {
 }
 
 pub fn empty_xyz() -> Tensor2 {
-    Tensor::<Backend, 2>::zeros([0, 3], &default_device())
+    Tensor::<Backend, 2>::zeros([0, 3], &cpu_device())
 }
 
 pub type Tensor1 = Tensor<Backend, 1>;
@@ -72,6 +72,9 @@ pub fn tensor2_from_slice(data: &[f32], rows: usize, cols: usize) -> Result<Tens
             rows,
             cols
         )));
+    }
+    if data.is_empty() {
+        return Ok(Tensor::<Backend, 2>::zeros([rows, cols], &cpu_device()));
     }
     let tensor_data = TensorData::from(data);
     let tensor =

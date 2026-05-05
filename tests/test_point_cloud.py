@@ -301,6 +301,33 @@ class TestSelectionAndConcatenation:
         with pytest.raises(ValueError):
             PointCloud.concatenate([pc, other], "strict")
 
+    def test_empty_selection_preserves_attribute_schema_for_strict_concat(self):
+        xyz = np.arange(9, dtype=np.float32).reshape(3, 3)
+        pc = PointCloud.from_xyz(xyz)
+        pc.set_attribute("classification", np.array([1, 2, 3], dtype=np.uint8))
+        pc.set_attribute("gps_time", np.array([0.1, 0.2, 0.3], dtype=np.float64))
+
+        empty = pc.select(np.array([False, False, False], dtype=np.bool_))
+
+        assert empty.point_count() == 0
+        assert empty.get_xyz().shape == (0, 3)
+        assert set(empty.attribute_names()) == {"classification", "gps_time"}
+        assert empty.get_attribute("classification").dtype == np.uint8
+        assert empty.get_attribute("gps_time").dtype == np.float64
+        assert empty.get_attribute("classification").shape == (0,)
+        assert empty.get_attribute("gps_time").shape == (0,)
+
+        concatenated = PointCloud.concatenate([empty, pc], "strict")
+        assert concatenated.point_count() == pc.point_count()
+        np.testing.assert_array_equal(
+            concatenated.get_attribute("classification"),
+            pc.get_attribute("classification"),
+        )
+        np.testing.assert_array_equal(
+            concatenated.get_attribute("gps_time"),
+            pc.get_attribute("gps_time"),
+        )
+
 
 class TestVoxelDownsample:
     """体素下采样测试"""

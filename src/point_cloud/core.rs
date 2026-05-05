@@ -205,7 +205,13 @@ impl HighPerformancePointCloud {
 
     pub fn select_indices(&self, indices: &[usize]) -> Result<Self> {
         if indices.is_empty() {
-            return Ok(Self::new());
+            let mut result = Self::new();
+            for (name, attr) in &self.attributes {
+                result
+                    .attributes
+                    .insert(name.clone(), attr.gather(indices)?);
+            }
+            return Ok(result);
         }
         let n = self.point_count();
         for &idx in indices {

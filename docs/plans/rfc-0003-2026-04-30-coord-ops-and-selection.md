@@ -133,7 +133,7 @@ Both examples load a test LAS file from `tests/data/` (add a small 10k-point fix
 - [x] `concatenate(&[&Self], ConcatPolicy)` implemented and tested for all three policies.
 - [x] `translate`, `scale`, `rotate` match Open3D semantics; doc page at `docs/api/transform.md` updated.
 - [ ] Both end-to-end example scripts run to completion against the test fixture, produce expected point-count reductions, and are referenced from `docs/getting-started/examples.md`. The scripts are present and documented, but fixture-backed acceptance is still open.
-- [ ] New tests cover: empty input, single-cloud concat, dtype-mismatch `ConcatPolicy::Strict` rejection, classification round-trip (LAS → select_by_classification([2]) → LAS → read back → same subset).
+- [ ] New tests cover: empty selection / zero-point strict concat, single-cloud concat, dtype-mismatch `ConcatPolicy::Strict` rejection, classification round-trip (LAS → select_by_classification([2]) → LAS → read back → same subset). Empty selection and concat edge cases are covered; LAS round-trip is still open.
 
 ## 5. Risks & mitigations
 
