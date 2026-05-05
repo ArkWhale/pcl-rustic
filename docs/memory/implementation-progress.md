@@ -13,7 +13,7 @@ examples, and automation.
 | RFC-0002 API Reset & Typed Attributes | Partial | Typed attributes and new downsample strategies exist, but attributes are host `Vec<T>` storage and zero-copy getters / getter benchmarks are not implemented. |
 | RFC-0003 Coordinate Ops & Selection | Partial | Selection, generic attribute filters, AABB/OBB crop, concat, transform wrappers, examples, and LAS standard-attribute round-trip coverage exist; fixture-backed examples and device-native selection are still missing. |
 | RFC-0004 GPU Hot Path | Mostly missing | Device transfer hooks exist, but voxel downsample, selection, concat, and benchmarks remain CPU/reference paths. |
-| RFC-0005 KD-tree, Octree, Normals | Partial | KD-tree, fallback, octree, Python APIs, normals, covariance support, and 10k brute-force oracle tests exist; cache tests, pruning, parallel normals, and benchmarks are still missing. |
+| RFC-0005 KD-tree, Octree, Normals | Partial | KD-tree, fallback, octree, Python APIs, normals, covariance support, 10k brute-force oracle tests, and 10k plane-normal coverage exist; cache tests, pruning, parallel normals, and benchmarks are still missing. |
 | RFC-0006 Outlier Removal | Partial | SOR/ROR APIs, masks, docs, synthetic acceptance tests, typed attribute propagation, and LAS standard-attribute propagation coverage exist; same-device mask contract, custom LAS ExtraBytes propagation, and 10M benchmark are missing. |
 | RFC-0007 ICP/GICP Registration | Partial | Registration API, point-to-point ICP, evaluate, covariance storage, and prerequisite validation exist; point-to-plane/GICP solvers are staged, not complete. |
 | RFC-0008 KD-tree Fallback & GICP Staging | Mostly implemented | Fallback behavior and staged GICP decision are implemented; full covariance-weighted GICP remains open by design. |
@@ -103,6 +103,9 @@ examples, and automation.
   10k-point random-cloud oracle tests against brute force.
 - Empty KD-tree/octree input errors and non-finite KD-tree input errors are
   covered.
+- Normal estimation coverage now uses a 10k-point synthetic plane and checks
+  unit-length normals within `1e-5` with at least 99% alignment to the plane
+  normal.
 
 ### RFC-0006 - Outlier Removal
 
@@ -297,6 +300,10 @@ Fresh verification from the 2026-05-05 RFC-0005 neighbor-oracle pass:
 Fresh verification from the 2026-05-05 RFC-0007 known-rotation pass:
 
 - `cargo test known_rotation_10k_is_recovered --lib` passed.
+
+Fresh verification from the 2026-05-05 RFC-0005 normal-estimation pass:
+
+- `cargo test plane_normals_are_unit_and_axis_aligned --lib` passed against a 10k-point synthetic plane.
 
 Fresh verification from the 2026-05-04 cleanup pass:
 

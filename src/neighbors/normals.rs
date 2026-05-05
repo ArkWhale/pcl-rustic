@@ -182,8 +182,8 @@ mod tests {
     #[test]
     fn plane_normals_are_unit_and_axis_aligned() {
         let mut xyz = Vec::new();
-        for x in 0..20 {
-            for y in 0..20 {
+        for x in 0..100 {
+            for y in 0..100 {
                 xyz.push([x as f32, y as f32, 0.0]);
             }
         }
@@ -196,9 +196,9 @@ mod tests {
             .iter()
             .zip(ny)
             .zip(nz)
-            .filter(|((&x, &y), &z)| (x * x + y * y + z * z - 1.0).abs() < 1e-4 && z.abs() > 0.99)
+            .filter(|((&x, &y), &z)| (x * x + y * y + z * z - 1.0).abs() < 1e-5 && z.abs() > 0.99)
             .count();
-        assert!(aligned > 390);
+        assert!(aligned >= 9_900);
     }
 
     #[test]
