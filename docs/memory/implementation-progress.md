@@ -39,6 +39,8 @@ examples, and automation.
   I/O implementation.
 - 1D NumPy attribute inputs now accept strided views, so common expressions such
   as `rgb[:, 0]` work without caller-side copies.
+- Attribute length validation now applies to zero-point clouds, so empty clouds
+  reject non-empty typed attributes instead of accepting impossible schemas.
 - `pyproject.toml` now points to `README.md`, and RFC docs are in MkDocs nav.
 
 ### RFC-0003 - Coordinate Ops & Selection
@@ -259,6 +261,11 @@ Fresh verification from the 2026-05-05 RFC-0003 empty-selection pass:
   - `uv run ruff check tests/test_point_cloud.py` passed.
   - `cargo test --lib` passed: 17/17 Rust unit tests. Rust emitted existing dead-code warnings.
   - `uv run pytest tests/test_point_cloud.py::TestSelectionAndConcatenation -q --no-cov` passed: 4/4 Python selection/concat tests.
+
+Fresh verification from the 2026-05-05 RFC-0002 empty-attribute validation pass:
+
+- Red check before implementation: `uv run pytest tests/test_point_cloud.py::TestPointCloudProperties::test_empty_point_cloud_rejects_non_empty_attribute -q --no-cov` failed because no `ValueError` was raised.
+- Green focused check after implementation: `uv run pytest tests/test_point_cloud.py::TestPointCloudProperties::test_empty_point_cloud_rejects_non_empty_attribute -q --no-cov` passed.
 
 Fresh verification from the 2026-05-04 cleanup pass:
 

@@ -162,6 +162,12 @@ class TestPointCloudProperties:
                 "test", np.array([1.0], dtype=np.float32)
             )  # 只有1个值，点云有2个点
 
+    def test_empty_point_cloud_rejects_non_empty_attribute(self):
+        pc = PointCloud()
+
+        with pytest.raises(ValueError):
+            pc.set_attribute("classification", np.array([1], dtype=np.uint8))
+
 
 class TestCoordinateTransform:
     """坐标变换测试"""

@@ -137,7 +137,7 @@ impl HighPerformancePointCloud {
     }
 
     pub fn set_attribute(&mut self, name: String, value: AttributeValue) -> Result<()> {
-        if !self.is_empty() && value.len() != self.point_count() {
+        if value.len() != self.point_count() {
             return Err(PointCloudError::DimensionMismatch {
                 expected: self.point_count(),
                 actual: value.len(),
