@@ -2,7 +2,7 @@
 
 ## Current Status: API Surface Broadly Present; Acceptance Criteria Still Partial
 
-Last updated: 2026-05-05.
+Last updated: 2026-05-06.
 
 This review used read-only subagent audits split across RFC-0002 through RFC-0005
 and RFC-0006 through RFC-0009, plus a local pass over source, tests, docs,
@@ -181,65 +181,85 @@ examples, and automation.
 
 ## Important Gaps By RFC
 
+This section is the current implementation backlog. It intentionally separates
+code gaps, acceptance-test gaps, and benchmark/evidence gaps so RFC status is
+not upgraded based on API presence alone.
+
 ### RFC-0002
 
-- `AttributeValue` storage is host `Vec<T>`, not the RFC's `Tensor1<Backend, T>`.
-- `get_xyz()` and `attribute_to_numpy()` clone/materialize arrays; the
-  zero-copy getter path is not implemented.
-- No 10M-point getter benchmark or documented 10x speedup.
-- Full tensor-backed typed attributes and zero-copy getters remain open.
-- `multica-home/knowledge/projects/pcl-rustic.md` is not present in this repo.
+- Code gap: `AttributeValue` storage is host `Vec<T>`, not the RFC's
+  `Tensor1<Backend, T>`.
+- Code gap: `get_xyz()` and `attribute_to_numpy()` clone/materialize arrays;
+  the zero-copy getter path is not implemented.
+- Evidence gap: no 10M-point getter benchmark or documented 10x speedup.
+- Scope decision still needed: either move literal typed attributes to Burn
+  tensors or explicitly amend RFC-0002 to accept host typed attribute storage.
+- External-doc gap: `multica-home/knowledge/projects/pcl-rustic.md` is not
+  present in this repo.
 
 ### RFC-0003
 
-- Selection and concat are host-vector implementations, not device-resident
-  tensor gather/cat operations.
-- Tests are synthetic; no `tests/data` LAS fixture was found.
-- End-to-end examples are not fixture-backed.
+- Code gap: selection and concat are host-vector implementations, not
+  device-resident tensor gather/cat operations.
+- Test gap: selectors beyond `select_by_classification` still lack LAS
+  fixture-backed coverage.
+- Fixture gap: no reusable `tests/data` LAS fixture exists.
+- Example gap: end-to-end examples are not fixture-backed and do not assert
+  expected point-count reductions.
 
 ### RFC-0004
 
-- Voxel downsample materializes host XYZ and groups points with `HashMap`.
-- `select` and `concatenate` are not implemented with Burn `nonzero`,
+- Code gap: voxel downsample materializes host XYZ and groups points with
+  `HashMap`; tensor-native voxel binning is not implemented.
+- Code gap: `select` and `concatenate` do not use Burn `nonzero`,
   `select_dim`, or `cat`.
-- No GPU device-residency pipeline test.
-- Benchmark harness is not the RFC backend matrix.
-- No 50M LAZ GPU-vs-CPU 3x speedup evidence.
-- No CPU/GPU golden tests for point counts, centroids, or seeded randomness.
+- Test gap: no GPU device-residency pipeline test.
+- Test gap: no CPU/GPU golden tests for point counts, centroids, or seeded
+  randomness.
+- Benchmark gap: the benchmark harness is not the RFC backend matrix.
+- Evidence gap: no 50M LAZ GPU-vs-CPU 3x speedup result.
 
 ### RFC-0005
 
-- KD-tree cache behavior is implemented but not acceptance-tested for no-rebuild
-  or mutation invalidation.
-- Octree `range_search` currently brute-forces over all XYZ rather than pruning
+- Test gap: KD-tree cache behavior is implemented but not acceptance-tested for
+  no-rebuild or mutation invalidation.
+- Code gap: octree `range_search` brute-forces over all XYZ rather than pruning
   via octree cells, though correctness is covered by a 10k brute-force oracle.
-- Normal estimation is not parallelized with `rayon`.
-- No 10M-point kNN benchmark result in `docs/performance/benchmarks.md`.
+- Code gap: normal estimation is not parallelized with `rayon`.
+- Benchmark gap: no 10M-point kNN result is recorded in
+  `docs/performance/benchmarks.md`.
 
 ### RFC-0006
 
-- Rust returns `Vec<bool>` masks, not same-device `Tensor1<Backend, bool>`.
-- LAS ExtraBytes/custom-attribute propagation is still missing.
-- No SOR 10M benchmark evidence.
+- Code gap: Rust returns `Vec<bool>` masks, not same-device
+  `Tensor1<Backend, bool>`.
+- Code/test gap: LAS ExtraBytes/custom-attribute propagation is still missing.
+- Benchmark gap: no SOR 10M benchmark evidence.
 
 ### RFC-0007
 
-- Point-to-plane and GICP are API-staged; they validate prerequisites but reuse
-  the point-to-point closed-form update.
-- Full covariance-weighted GICP plane-to-plane solve is not implemented.
-- Open3D Bunny comparison test is missing.
-- 500k-vs-500k registration benchmark is missing.
+- Code gap: point-to-plane and GICP are API-staged; they validate
+  prerequisites but reuse the point-to-point closed-form update.
+- Code gap: full covariance-weighted GICP plane-to-plane solve is not
+  implemented.
+- Test gap: Open3D Bunny comparison test is missing.
+- Benchmark gap: 500k-vs-500k registration benchmark is missing.
+- Documentation gap: registration docs describe staged GICP behavior, but full
+  estimator examples and Open3D migration notes remain incomplete until the
+  solvers are real.
 
 ### RFC-0008
 
-- The full covariance-weighted GICP solver remains open by design.
+- Follow-up gap: the full covariance-weighted GICP solver remains open by
+  design and belongs with RFC-0007 solver completion.
 
 ### RFC-0009
 
-- Standard and full benchmark modes have not been executed locally; they require
-  high-memory benchmark hardware.
-- The docs renderer exists, but release benchmark results still need to be
-  produced on recorded hardware before publishing measured performance rows.
+- Evidence gap: standard and full benchmark modes have not been executed
+  locally; they require high-memory benchmark hardware.
+- Documentation gap: the docs renderer exists, but release benchmark results
+  still need to be produced on recorded hardware before publishing measured
+  performance rows.
 
 ## 2026-05-04 Cleanup Pass
 
@@ -363,18 +383,19 @@ run manually then. CI installs `just` before invoking `just ci`.
 
 ## Next Implementation Priorities
 
-1. Finish RFC-0004 tensor-native voxel binning, selection, concat, and GPU
-   benchmark matrix.
-2. Replace staged point-to-plane/GICP updates with their actual solvers and add
-   the required comparison/scale tests.
-3. Close remaining strict RFC-0003 gaps: fixture-backed examples and
-   device-native selection.
-4. Decide whether RFC-0002 should remain host-typed attributes by design or move
-   to literal tensor-backed typed attributes and zero-copy getters.
-5. Strengthen RFC-0005/RFC-0006 acceptance tests and publish the required
-   benchmark results.
-6. Run RFC-0009 standard/full benchmarks on recorded high-memory hardware and
-   regenerate benchmark docs from the resulting CSV files.
+1. RFC-0004: implement tensor-native voxel binning, selection, concat, and the
+   CPU/GPU golden tests needed before claiming a GPU hot path.
+2. RFC-0007/RFC-0008: replace staged point-to-plane/GICP updates with actual
+   solvers, then add Open3D comparison and registration benchmark coverage.
+3. RFC-0002: decide whether to amend the typed-attribute storage design or move
+   attributes to literal Burn tensors; implement zero-copy getter path if the
+   RFC remains literal.
+4. RFC-0003: add a small reusable LAS fixture, run fixture-backed examples, and
+   cover remaining LAS selectors.
+5. RFC-0005/RFC-0006: add cache tests, octree pruning, same-device masks,
+   LAS ExtraBytes propagation, and the required 10M kNN/SOR benchmark evidence.
+6. RFC-0009: run standard/full benchmark modes on recorded high-memory hardware
+   and regenerate benchmark docs from the resulting CSV files.
 
 ## Architecture Decisions Recorded
 
