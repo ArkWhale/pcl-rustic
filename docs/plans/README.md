@@ -25,6 +25,7 @@ rfc-{id}-{YYYY-MM-DD}-{kebab-case-title}.md
 | [RFC-0009](rfc-0009-2026-05-04-large-scale-benchmark-suite.md) | Large-Scale Benchmark Suite | Implemented (external evidence open) | Benchmarking / RFC-0004 |
 | [RFC-0010](rfc-0010-2026-05-07-host-typed-attribute-storage.md) | Host Typed Attribute Storage Amendment | Accepted | RFC-0002 amendment |
 | [RFC-0011](rfc-0011-2026-05-07-completion-evidence-gates.md) | Completion Evidence Gates | Accepted | RFC tracking process |
+| [RFC-0012](rfc-0012-2026-05-07-rfc0004-device-residency-scope.md) | RFC-0004 Device Residency Scope | Accepted | RFC-0004 amendment |
 
 ## Process
 

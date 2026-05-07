@@ -1,10 +1,10 @@
 # RFC-0004: GPU Hot-Path Rewrite (M3)
 
-- **Status:** Proposed (amended by RFC-0010)
+- **Status:** Proposed (amended by RFC-0010/RFC-0012)
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
-- **Related:** RFC-0002 (prerequisite: typed attrs), RFC-0003 (prerequisite: `select(mask)` primitive), RFC-0010 (host typed attribute storage amendment)
+- **Related:** RFC-0002 (prerequisite: typed attrs), RFC-0003 (prerequisite: `select(mask)` primitive), RFC-0010 (host typed attribute storage amendment), RFC-0012 (device residency scope amendment)
 
 ## 1. Summary
 

@@ -1,4 +1,4 @@
-# Implementation Progress - RFC 0002-0011
+# Implementation Progress - RFC 0002-0012
 
 ## Current Status: API Surface Broadly Present; Repo-Local And External Evidence Split
 
@@ -11,7 +11,9 @@ amendment to RFC-0002. RFC-0011 was added on 2026-05-07 to separate
 repo-local implementation completion from external evidence gates such as
 high-memory benchmarks, cross-platform hosted CI, GPU speedup measurements, and
 external workspace documents. External evidence remains unclaimed until a
-recorded artifact exists.
+recorded artifact exists. RFC-0012 was added and accepted on 2026-05-07 to
+amend RFC-0004's repo-local GPU hot-path scope to device-preserving XYZ results
+with host-side planning and explicit external benchmark evidence gates.
 
 | RFC | Status | Summary |
 |---|---|---|
@@ -25,6 +27,7 @@ recorded artifact exists.
 | RFC-0009 Large-Scale Benchmark Suite | Implemented (external evidence open) | Smoke/standard/full modes, concat/downsample matrices, typed attrs, CSV output, just recipes, CI smoke job, and docs regeneration support are implemented; standard/full benchmark artifacts remain unrecorded. |
 | RFC-0010 Host Typed Attribute Storage Amendment | Accepted | Host typed attribute storage is documented as the accepted RFC-0002 storage model, with cross-RFC amendments for selection, GPU scope, outlier masks, and covariance storage. |
 | RFC-0011 Completion Evidence Gates | Accepted | RFC tracking now distinguishes repo-local gaps from external evidence gaps and forbids benchmark claims without recorded artifacts. |
+| RFC-0012 RFC-0004 Device Residency Scope | Accepted | RFC-0004 repo-local completion now requires source/common-device XYZ results for selection, concat, voxel downsample, and transforms, while measured GPU speedup remains external evidence. |
 
 ## Implemented Evidence
 
