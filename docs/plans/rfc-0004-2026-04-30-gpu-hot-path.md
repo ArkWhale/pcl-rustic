@@ -1,18 +1,18 @@
 # RFC-0004: GPU Hot-Path Rewrite (M3)
 
-- **Status:** Proposed
+- **Status:** Proposed (amended by RFC-0010)
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
-- **Related:** RFC-0002 (prerequisite: typed attrs + zero-copy getters), RFC-0003 (prerequisite: `select(mask)` primitive)
+- **Related:** RFC-0002 (prerequisite: typed attrs), RFC-0003 (prerequisite: `select(mask)` primitive), RFC-0010 (host typed attribute storage amendment)
 
 ## 1. Summary
 
-Close LEO-36 priority #1 by making the Burn `Router<(Wgpu, NdArray)>` backend carry real load. Today only `transform()` runs on the tensor device; voxel binning, gather, concatenate, and LAS ingest all round-trip to `Vec<Vec<f32>>`. M3 rewrites voxel downsample as a tensor-native kernel (quantize → sort-by-key → segment reduce), lifts gather/scatter onto the device, and publishes a GPU-vs-CPU benchmark matrix that replaces the current CPU-only README table.
+Close LEO-36 priority #1 by making the Burn `Router<(Wgpu, NdArray)>` backend carry real load. Today only `transform()` runs on the tensor device; voxel binning and XYZ gather/concatenate still round-trip through host data. M3 rewrites XYZ-heavy voxel downsample as tensor-native work where practical and publishes a GPU-vs-CPU benchmark matrix that replaces the current CPU-only README table. RFC-0010 keeps typed attributes host-side, so this RFC must not require all attribute gather/cat paths to remain on device.
 
 ## 2. Motivation
 
-The LEO-36 audit showed the benchmark table in README (1.3–1.5 M pts/s) is CPU — the GPU promise is unredeemed. Priority #1 is explicitly the top priority, and every other milestone assumes device-resident tensors (RFC-0003 selection, RFC-0006 outlier removal, RFC-0007 ICP all rely on mask/gather running on the GPU). Without M3, each downstream RFC has to re-pay the host round-trip cost.
+The LEO-36 audit showed the benchmark table in README (1.3–1.5 M pts/s) is CPU — the GPU promise is unredeemed. Priority #1 is explicitly the top priority. RFC-0010 narrows the device-residency contract to XYZ tensors for now; typed attribute masks/gather remain host-side until a future RFC proves exact multi-dtype device storage.
 
 ## 3. Detailed design
 
@@ -44,13 +44,20 @@ All steps are `burn::tensor` ops supported on both backends. The only CPU except
 
 Alternative considered: 3-tuple Cantor pairing. Rejected — not locality-preserving.
 
-### 3.3 `select(mask)` and `concatenate` on device
+### 3.3 `select(mask)` and `concatenate` device scope
+
+**Amendment:** RFC-0010 supersedes the typed-attribute device-residency
+requirement in this section. GPU hot-path work may optimize XYZ selection,
+concatenation, and voxel binning while preserving host typed attribute
+propagation.
 
 RFC-0003 defines these at the API level. M3 makes them tensor-native:
 
-- `select(mask)` uses Burn `nonzero` + `select_dim(0, indices)` + same gather over every `AttributeValue`.
-- `concatenate(&[&Self], policy)` uses Burn `cat(dim=0)`. `Union` policy zero-fills missing attributes with `Tensor1::zeros(len, dtype)` on the same device.
-- Both keep the result on the source device.
+- `select(mask)` may use Burn `nonzero` + `select_dim(0, indices)` for XYZ.
+- `concatenate(&[&Self], policy)` may use Burn `cat(dim=0)` for XYZ.
+- Typed attributes follow RFC-0010 host gather/cat semantics and must preserve
+  dtype and point order.
+- The result's XYZ tensor stays on the source device.
 
 ### 3.4 LAS reader — still CPU
 
@@ -86,12 +93,12 @@ Rust side: add `pub fn to_device(&self, device: BackendDevice) -> Self` that Bur
 
 ## 4. Acceptance criteria
 
-- [ ] Voxel downsample runs end-to-end on the Burn tensor device (no `tensor2_to_vec` calls in the hot path).
-- [ ] `select(mask)`, `select_indices(indices)`, `concatenate` (from RFC-0003) verified to stay on device via a test that builds a cloud on GPU, runs the full pipeline, and asserts the result tensor's device equals the input's.
+- [ ] Voxel downsample keeps XYZ-heavy binning/reduction on the Burn tensor device where practical; any host attribute propagation is explicit and dtype-preserving.
+- [ ] `select(mask)`, `select_indices(indices)`, `concatenate` (from RFC-0003) verified to keep result XYZ tensors on the input device via a test that builds a cloud on GPU, runs the full pipeline, and asserts the result tensor's device equals the input's.
 - [ ] Benchmark matrix (§3.5) runs in CI against at least the `wgpu-vulkan` path on Linux and `ndarray-cpu` everywhere.
 - [ ] README performance table replaced with the generated table; the CPU-only row is preserved for continuity and labeled as such.
 - [ ] The full `load → select_classifications → voxel_downsample → transform → to_las` pipeline on a 50M-point LAZ fixture shows ≥ 3× speedup on GPU vs. CPU on the reference machine.
-- [ ] Golden tests: CPU and GPU paths produce the same point count (exact) and the same centroid positions within 1e-5 f32 tolerance for `NEAREST_TO_CENTROID`; for `RANDOM_SEEDED`, same seed → bit-identical output across runs on the same backend.
+- [ ] Golden tests: CPU and GPU paths produce the same point count (exact), the same centroid positions within 1e-5 f32 tolerance for `NEAREST_TO_CENTROID`, dtype-preserving attribute propagation, and for `RANDOM_SEEDED`, same seed → bit-identical output across runs on the same backend.
 - [ ] Documentation: `docs/performance/optimization.md` updated with device-selection guidance.
 
 ## 5. Risks & mitigations

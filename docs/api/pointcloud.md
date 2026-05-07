@@ -1,12 +1,12 @@
 # PointCloud
 
-`PointCloud` is the main NumPy-facing API. Coordinates are stored as `float32`
-XYZ. `from_xyz()` accepts `float32`, `float64`, `int32`, and `int64` arrays and
-autocasts to `float32`.
+`PointCloud` is the main NumPy-facing API. Coordinates are stored as tensor-backed
+`float32` XYZ. `from_xyz()` accepts `float32`, `float64`, `int32`, and `int64`
+arrays and autocasts to `float32`.
 
-Attributes preserve their NumPy dtype for `float32`, `float64`, `uint8`,
-`uint16`, `uint32`, `int32`, `int64`, and `bool`. Packed covariance attributes
-use shape `[N, 6]` with `float32`.
+Attributes are host-side typed vectors that preserve their NumPy dtype for
+`float32`, `float64`, `uint8`, `uint16`, `uint32`, `int32`, `int64`, and `bool`.
+Packed covariance attributes use shape `[N, 6]` with `float32`.
 
 ## Construction
 

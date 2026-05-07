@@ -1,14 +1,14 @@
 # RFC-0003: Coordinate Ops & Selection (M2)
 
-- **Status:** Partial
+- **Status:** Partial (amended by RFC-0010)
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
-- **Related:** RFC-0001 (roadmap), RFC-0002 (prerequisite), RFC-0004 (GPU lift follows)
+- **Related:** RFC-0001 (roadmap), RFC-0002 (prerequisite), RFC-0004 (GPU lift follows), RFC-0010 (host typed attribute storage amendment)
 
 ## 1. Summary
 
-Close LEO-36 priority #3 by shipping `concatenate`, a single `select(mask)` tensor primitive, and layered feature-/region-based selectors (`select_where`, `select_by_classification`, `select_intensity_range`, `crop_aabb`, `crop_obb`). Ship priority #9's end-to-end example in two variants (spatial-grid split, classification-aware split). CPU-first implementation — RFC-0004 moves the hot path onto the GPU.
+Close LEO-36 priority #3 by shipping `concatenate`, a single `select(mask)` primitive, and layered feature-/region-based selectors (`select_where`, `select_by_classification`, `select_intensity_range`, `crop_aabb`, `crop_obb`). Ship priority #9's end-to-end example in two variants (spatial-grid split, classification-aware split). CPU-first implementation — RFC-0004 moves XYZ-heavy hot paths onto the GPU where practical.
 
 ## 2. Motivation
 
@@ -22,19 +22,25 @@ Priority #3 covers transform, concatenate, and selection (region-level) per LEO-
 
 ### 3.1 Core primitive: `select`
 
+**Amendment:** RFC-0010 supersedes this section's device-resident attribute
+requirement. Typed attributes are host `Vec<T>` values, so selection and concat
+may use host masks/gather for attributes. Device-native selection remains a
+future optimization target for XYZ and any future device-resident attribute
+subset.
+
 One kernel everything else lowers to:
 
 ```rust
 impl HighPerformancePointCloud {
-    pub fn select(&self, mask: &Tensor1<Backend, bool>) -> Result<Self>;
-    pub fn select_indices(&self, indices: &Tensor1<Backend, i64>) -> Result<Self>;
+    pub fn select(&self, mask: &[bool]) -> Result<Self>;
+    pub fn select_indices(&self, indices: &[usize]) -> Result<Self>;
 }
 ```
 
-- `select(mask)` does a Burn `select` / `masked_select` over XYZ and every attribute. Attribute types flow through unchanged (RFC-0002 prerequisite).
-- `select_indices(i)` is the gather form; `select(mask)` is sugar that computes `mask.nonzero()` first.
+- `select(mask)` applies the mask to XYZ and every attribute. Attribute types flow through unchanged (RFC-0002/RFC-0010 prerequisite).
+- `select_indices(i)` is the gather form; `select(mask)` is sugar that computes selected indices first.
 - Both preserve point order (stable index).
-- Both live on the tensor device — once RFC-0004 lands, no host round-trip on GPU.
+- XYZ may be optimized to stay on the tensor device in future GPU work; typed attributes remain host-side under RFC-0010.
 
 ### 3.2 Feature-based selectors
 
@@ -127,7 +133,7 @@ Both examples load a test LAS file from `tests/data/` (add a small 10k-point fix
 
 ## 4. Acceptance criteria
 
-- [ ] `select(mask)`, `select_indices(indices)` implemented and tested; operate in place on the Burn tensor device. Current implementation is host-backed, not device-native.
+- [x] `select(mask)`, `select_indices(indices)` implemented and tested with host typed attribute propagation per RFC-0010.
 - [ ] `select_where`, `select_by_classification`, `select_return_number`, `select_intensity_range`, `select_elevation_range` implemented and tested with LAS fixtures. Synthetic tests exist, and LAS standard-attribute round-trip coverage now covers `select_by_classification`; full fixture coverage for all selectors is still open.
 - [x] `crop_aabb`, `crop_obb`, `aabb()`, `obb()` implemented and tested.
 - [x] `concatenate(&[&Self], ConcatPolicy)` implemented and tested for all three policies.

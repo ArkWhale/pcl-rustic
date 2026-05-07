@@ -23,6 +23,7 @@ rfc-{id}-{YYYY-MM-DD}-{kebab-case-title}.md
 | [RFC-0007](rfc-0007-2026-04-30-icp-gicp-registration.md) | ICP & GICP Registration | Partial | M6 |
 | [RFC-0008](rfc-0008-2026-05-04-kdtree-fallback-and-gicp-staging.md) | KD-tree Fallback & GICP Staging | Implemented (staged GICP follow-up open) | M4/M6 implementation detail |
 | [RFC-0009](rfc-0009-2026-05-04-large-scale-benchmark-suite.md) | Large-Scale Benchmark Suite | Implemented | Benchmarking / RFC-0004 |
+| [RFC-0010](rfc-0010-2026-05-07-host-typed-attribute-storage.md) | Host Typed Attribute Storage Amendment | Accepted | RFC-0002 amendment |
 
 ## Process
 

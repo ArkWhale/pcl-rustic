@@ -1,10 +1,10 @@
 # RFC-0006: Outlier Removal — SOR & ROR (M5)
 
-- **Status:** Partial
+- **Status:** Partial (amended by RFC-0010)
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
-- **Related:** RFC-0001 (roadmap), RFC-0005 (prerequisite — KD-tree)
+- **Related:** RFC-0001 (roadmap), RFC-0005 (prerequisite — KD-tree), RFC-0010 (host typed attribute storage amendment)
 
 ## 1. Summary
 
@@ -26,11 +26,15 @@ impl HighPerformancePointCloud {
         &self,
         nb_neighbors: usize,
         std_ratio: f32,
-    ) -> Result<(Self, Tensor1<Backend, bool>)>;
+    ) -> Result<(Self, Vec<bool>)>;
 }
 ```
 
-Returns the filtered cloud and the per-input-point `kept` mask (`true` = kept). The mask lives on the same device as the input cloud (consistent with RFC-0003's `select(mask)` contract); CPU is fine for M5 since SOR is computed host-side anyway.
+Returns the filtered cloud and the per-input-point `kept` mask (`true` = kept).
+RFC-0010 accepts host typed attributes and host masks for the current selection
+contract, so Rust returns `Vec<bool>` and Python returns a bool NumPy array. A
+same-device tensor mask is deferred until device-resident attributes are
+revisited.
 
 Algorithm detail:
 
@@ -49,7 +53,7 @@ impl HighPerformancePointCloud {
         &self,
         nb_points: usize,
         radius: f32,
-    ) -> Result<(Self, Tensor1<Backend, bool>)>;
+    ) -> Result<(Self, Vec<bool>)>;
 }
 ```
 
@@ -79,7 +83,7 @@ Open3D ships no defaults (all args required). We match that — no silent defaul
 
 ## 4. Acceptance criteria
 
-- [x] Both methods implemented with the Python signatures in §3.3. Rust currently returns a host `Vec<bool>` mask instead of same-device `Tensor1<Backend, bool>`.
+- [x] Both methods implemented with the Python signatures in §3.3. Rust returns a host `Vec<bool>` mask per RFC-0010.
 - [x] Unit tests:
   - SOR on a synthetic cloud = Gaussian blob + injected outliers; assert ≥ 95% of injected outliers removed at `std_ratio=2.0`.
   - ROR on a 1D line of points with one isolated extra point; assert the extra is removed at `nb_points=2, radius=step_size*1.5`.

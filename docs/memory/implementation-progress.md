@@ -1,23 +1,25 @@
-# Implementation Progress - RFC 0002-0009
+# Implementation Progress - RFC 0002-0010
 
 ## Current Status: API Surface Broadly Present; Acceptance Criteria Still Partial
 
-Last updated: 2026-05-06.
+Last updated: 2026-05-07.
 
 This review used read-only subagent audits split across RFC-0002 through RFC-0005
 and RFC-0006 through RFC-0009, plus a local pass over source, tests, docs,
-examples, and automation.
+examples, and automation. RFC-0010 was added on 2026-05-07 as a storage
+amendment to RFC-0002.
 
 | RFC | Status | Summary |
 |---|---|---|
-| RFC-0002 API Reset & Typed Attributes | Partial | Typed attributes and new downsample strategies exist, but attributes are host `Vec<T>` storage and zero-copy getters / getter benchmarks are not implemented. |
+| RFC-0002 API Reset & Typed Attributes | Partial, amended by RFC-0010 | Typed attributes, host typed storage, and new downsample strategies exist; XYZ getter optimization / getter benchmarks are not implemented. |
 | RFC-0003 Coordinate Ops & Selection | Partial | Selection, generic attribute filters, AABB/OBB crop, concat, transform wrappers, examples, and LAS standard-attribute round-trip coverage exist; fixture-backed examples and device-native selection are still missing. |
 | RFC-0004 GPU Hot Path | Mostly missing | Device transfer hooks exist, but voxel downsample, selection, concat, and benchmarks remain CPU/reference paths. |
 | RFC-0005 KD-tree, Octree, Normals | Partial | KD-tree, fallback, octree, Python APIs, normals, covariance support, 10k brute-force oracle tests, 10k plane-normal coverage, and KD-tree cache behavior tests exist; pruning, parallel normals, and benchmarks are still missing. |
-| RFC-0006 Outlier Removal | Partial | SOR/ROR APIs, masks, docs, synthetic acceptance tests, typed attribute propagation, and LAS standard-attribute propagation coverage exist; same-device mask contract, custom LAS ExtraBytes propagation, and 10M benchmark are missing. |
+| RFC-0006 Outlier Removal | Partial, amended by RFC-0010 | SOR/ROR APIs, host masks, docs, synthetic acceptance tests, typed attribute propagation, and LAS standard-attribute propagation coverage exist; custom LAS ExtraBytes propagation and 10M benchmark are missing. |
 | RFC-0007 ICP/GICP Registration | Partial | Registration API, point-to-point ICP, evaluate, covariance storage, and prerequisite validation exist; point-to-plane/GICP solvers are staged, not complete. |
 | RFC-0008 KD-tree Fallback & GICP Staging | Mostly implemented | Fallback behavior and staged GICP decision are implemented; full covariance-weighted GICP remains open by design. |
 | RFC-0009 Large-Scale Benchmark Suite | Mostly implemented | Smoke/standard/full modes, concat/downsample matrices, typed attrs, CSV output, just recipes, CI smoke job, and docs regeneration support are implemented; standard/full benchmark runs remain unexecuted. |
+| RFC-0010 Host Typed Attribute Storage Amendment | Accepted | Host typed attribute storage is documented as the accepted RFC-0002 storage model, with cross-RFC amendments for selection, GPU scope, outlier masks, and covariance storage. |
 
 ## Implemented Evidence
 
@@ -41,6 +43,8 @@ examples, and automation.
   as `rgb[:, 0]` work without caller-side copies.
 - Attribute length validation now applies to zero-point clouds, so empty clouds
   reject non-empty typed attributes instead of accepting impossible schemas.
+- RFC-0010 accepts host `Vec<T>` typed attribute storage as the RFC-0002
+  storage contract while leaving XYZ tensor-backed.
 - `pyproject.toml` now points to `README.md`, and RFC docs are in MkDocs nav.
 
 ### RFC-0003 - Coordinate Ops & Selection
@@ -190,20 +194,16 @@ not upgraded based on API presence alone.
 
 ### RFC-0002
 
-- Code gap: `AttributeValue` storage is host `Vec<T>`, not the RFC's
-  `Tensor1<Backend, T>`.
-- Code gap: `get_xyz()` and `attribute_to_numpy()` clone/materialize arrays;
-  the zero-copy getter path is not implemented.
-- Evidence gap: no 10M-point getter benchmark or documented 10x speedup.
-- Scope decision still needed: either move literal typed attributes to Burn
-  tensors or explicitly amend RFC-0002 to accept host typed attribute storage.
+- Code gap: `get_xyz()` clones/materializes arrays; the XYZ getter optimization
+  path is not implemented.
+- Evidence gap: no 10M-point XYZ getter benchmark or documented speedup.
 - External-doc gap: `multica-home/knowledge/projects/pcl-rustic.md` is not
   present in this repo.
 
 ### RFC-0003
 
-- Code gap: selection and concat are host-vector implementations, not
-  device-resident tensor gather/cat operations.
+- Code gap: selection and concat still need XYZ device-residency optimization
+  before RFC-0004 can claim a GPU hot path.
 - Test gap: selectors beyond `select_by_classification` still lack LAS
   fixture-backed coverage.
 - Fixture gap: no reusable `tests/data` LAS fixture exists.
@@ -232,8 +232,6 @@ not upgraded based on API presence alone.
 
 ### RFC-0006
 
-- Code gap: Rust returns `Vec<bool>` masks, not same-device
-  `Tensor1<Backend, bool>`.
 - Code/test gap: LAS ExtraBytes/custom-attribute propagation is still missing.
 - Benchmark gap: no SOR 10M benchmark evidence.
 
@@ -395,17 +393,16 @@ run manually then. CI installs `just` before invoking `just ci`.
 
 ## Next Implementation Priorities
 
-1. RFC-0004: implement tensor-native voxel binning, selection, concat, and the
-   CPU/GPU golden tests needed before claiming a GPU hot path.
+1. RFC-0004: implement tensor-native XYZ-heavy voxel binning, selection, concat,
+   and the CPU/GPU golden tests needed before claiming a GPU hot path.
 2. RFC-0007/RFC-0008: replace staged point-to-plane/GICP updates with actual
    solvers, then add Open3D comparison and registration benchmark coverage.
-3. RFC-0002: decide whether to amend the typed-attribute storage design or move
-   attributes to literal Burn tensors; implement zero-copy getter path if the
-   RFC remains literal.
+3. RFC-0002: implement the remaining XYZ getter optimization path and benchmark
+   evidence if getter performance remains a release criterion.
 4. RFC-0003: add a small reusable LAS fixture, run fixture-backed examples, and
    cover remaining LAS selectors.
-5. RFC-0005/RFC-0006: add octree pruning, same-device masks, LAS ExtraBytes
-   propagation, and the required 10M kNN/SOR benchmark evidence.
+5. RFC-0005/RFC-0006: add octree pruning, LAS ExtraBytes propagation, and the
+   required 10M kNN/SOR benchmark evidence.
 6. RFC-0009: run standard/full benchmark modes on recorded high-memory hardware
    and regenerate benchmark docs from the resulting CSV files.
 
@@ -413,8 +410,8 @@ run manually then. CI installs `just` before invoking `just ci`.
 
 | Decision | Rationale |
 |---|---|
-| `AttributeValue` currently uses host `Vec<T>` for typed attrs | Burn Router backend does not carry all LAS attribute dtypes directly; this diverges from RFC-0002's literal tensor-storage wording. |
-| Added `F32x6` packed covariance variant | RFC-0007 needs `[N, 6]` covariance storage while preserving typed attribute boundary. |
+| `AttributeValue` uses host `Vec<T>` for typed attrs | Accepted by RFC-0010 so LAS/NumPy dtypes remain exact while XYZ stays tensor-backed. |
+| Added `F32x6` packed covariance variant | RFC-0007 needs `[N, 6]` covariance storage while preserving the RFC-0010 host typed attribute boundary. |
 | KD-tree falls back to brute-force on degenerate axis buckets | `kiddo` can panic on many identical values along an axis; fallback preserves correctness. |
 | GICP API staged behind covariance validation | Keeps RFC API usable while avoiding an unverified covariance-weighted solver. |
 | `just ci` no longer depends on pre-commit | CI should use pytest/cargo directly per user instruction; pre-commit remains separately available. |

@@ -45,9 +45,9 @@ FPS / Poisson-disk sampling, colored ICP, RANSAC/FGR global registration, DBSCAN
 
 | RFC | Milestone | Deliverable | Depends on | Est. |
 |---|---|---|---|---|
-| RFC-0002 | M1 — API reset & typed attributes | `AttributeValue` enum; zero-copy NumPy getters; seeded `RANDOM` voxel strategy; repo hygiene | — | 1 sprint |
+| RFC-0002 | M1 — API reset & typed attributes | `AttributeValue` enum; dtype-preserving NumPy getters; seeded `RANDOM` voxel strategy; repo hygiene | — | 1 sprint |
 | RFC-0003 | M2 — Coordinate ops & selection | `concatenate`, `select(mask)`, `select_where`, `select_by_classification`, `crop_aabb/obb`, `translate/rotate/scale` | M1 | 1 sprint |
-| RFC-0004 | M3 — GPU hot-path rewrite | Burn-native voxel binning, gather/scatter on tensor device, published GPU-vs-CPU benchmarks | M1, M2 | 1.5 sprints |
+| RFC-0004 | M3 — GPU hot-path rewrite | Burn-native XYZ-heavy voxel binning, device-aware XYZ gather/scatter, published GPU-vs-CPU benchmarks | M1, M2 | 1.5 sprints |
 | RFC-0005 | M4 — kNN infra & normals | KD-tree (CPU first), `knn`, `radius_search`, `estimate_normals` | M1 | 1 sprint |
 | RFC-0006 | M5 — Outlier removal | `remove_statistical_outlier`, `remove_radius_outlier` with kept-index mask | M4 | 0.5 sprint |
 | RFC-0007 | M6 — ICP + GICP | `registration::icp` pipeline; Point-to-Point, Point-to-Plane, GICP estimators; `RegistrationResult` | M4 | 2 sprints |

@@ -1,10 +1,10 @@
 # RFC-0007: ICP & GICP Registration (M6)
 
-- **Status:** Partial
+- **Status:** Partial (amended by RFC-0010)
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
-- **Related:** RFC-0001 (roadmap), RFC-0005 (prerequisite — KD-tree, normals), RFC-0003 (selection / transform wrappers)
+- **Related:** RFC-0001 (roadmap), RFC-0005 (prerequisite — KD-tree, normals), RFC-0003 (selection / transform wrappers), RFC-0010 (host typed attribute storage amendment)
 
 ## 1. Summary
 
@@ -99,7 +99,7 @@ Per ICP iteration:
 
 **Point-to-Plane** — linearized Gauss-Newton with per-iteration target-normal projections. Requires `target.estimate_normals(...)` (RFC-0005) already called; verified at entry and a clear error if normals are missing.
 
-**Generalized ICP** — plane-to-plane formulation (Segal, Haehnel, Thrun 2009). Requires both source *and* target covariances per point. Each covariance is the upper-triangle of a symmetric 3×3 matrix packed into a 6-element row, stored as a single `AttributeValue` named `"covariance"` using a 2D tensor of shape `[N, 6]`. The six column indices encode the following components (docstring on `estimate_covariances`):
+**Generalized ICP** — plane-to-plane formulation (Segal, Haehnel, Thrun 2009). Requires both source *and* target covariances per point. Each covariance is the upper-triangle of a symmetric 3×3 matrix packed into a 6-element row, stored as a single `AttributeValue::F32x6(Vec<[f32; 6]>)` named `"covariance"` per RFC-0010. The public NumPy getter returns shape `[N, 6]`. The six column indices encode the following components (docstring on `estimate_covariances`):
 
 ```
 index 0 → cov_00  (variance along X)
@@ -110,7 +110,7 @@ index 4 → cov_12  (YZ covariance)
 index 5 → cov_22  (variance along Z)
 ```
 
-This maps to the full matrix as `[[00, 01, 02], [01, 11, 12], [02, 12, 22]]`. Storing as a 2D tensor keeps the typed-attribute design aligned (extending `AttributeValue` with a `Tensor2` variant as needed in RFC-0002). `estimate_covariances(knn)` computes and writes this attribute; M6 does not use separate scalar attributes for covariance components. Solve each iteration as a sum of Mahalanobis residuals via Gauss-Newton; reuse the linear solver from Point-to-Plane.
+This maps to the full matrix as `[[00, 01, 02], [01, 11, 12], [02, 12, 22]]`. `estimate_covariances(knn)` computes and writes this packed host typed attribute; M6 does not use separate scalar attributes for covariance components. Solve each iteration as a sum of Mahalanobis residuals via Gauss-Newton; reuse the linear solver from Point-to-Plane.
 
 `epsilon` on the GICP variant regularizes the covariances toward planarity (Open3D exposes it as `epsilon=1e-3` by default) — surface through the enum constructor.
 
@@ -133,7 +133,7 @@ Early-exit diagnostic: log at `info` level which criterion triggered termination
 
 ### 3.6 Supporting work
 
-- New method `PointCloud::estimate_covariances(knn: usize)` — writes a 2D tensor attribute `"covariance"` of shape `[N, 6]` (upper-triangle packed, see §3.3 for component layout). Shares the kNN infra from RFC-0005.
+- New method `PointCloud::estimate_covariances(knn: usize)` — writes a packed `AttributeValue::F32x6` attribute `"covariance"` exposed to Python as shape `[N, 6]` (upper-triangle packed, see §3.3 for component layout). Shares the kNN infra from RFC-0005.
 - `registration::evaluate` is a one-shot variant with no iteration, useful for acceptance testing and for users who want to score a known transform.
 
 ## 4. Acceptance criteria

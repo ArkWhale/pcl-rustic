@@ -101,8 +101,12 @@ class TestPointCloudProperties:
         xyz = np.arange(12, dtype=np.float32).reshape(4, 3)
         pc = PointCloud.from_xyz(xyz)
         values = {
+            "confidence": np.array([0.1, 0.2, 0.3, 0.4], dtype=np.float32),
             "classification": np.array([2, 2, 6, 9], dtype=np.uint8),
             "source_id": np.array([1, 2, 3, 4], dtype=np.uint16),
+            "point_source_uid": np.array([10, 20, 30, 40], dtype=np.uint32),
+            "scan_angle": np.array([-3, -1, 1, 3], dtype=np.int32),
+            "global_id": np.array([100, 200, 300, 400], dtype=np.int64),
             "gps_time": np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float64),
             "flag": np.array([True, False, True, False], dtype=np.bool_),
         }
@@ -111,6 +115,13 @@ class TestPointCloudProperties:
             out = pc.get_attribute(name)
             assert out.dtype == data.dtype
             np.testing.assert_array_equal(out, data)
+
+        covariance = np.arange(24, dtype=np.float32).reshape(4, 6)
+        pc.set_attribute("covariance", covariance)
+        out_covariance = pc.get_attribute("covariance")
+        assert out_covariance.dtype == np.float32
+        assert out_covariance.shape == (4, 6)
+        np.testing.assert_array_equal(out_covariance, covariance)
 
     def test_from_numpy_alias(self):
         data = {

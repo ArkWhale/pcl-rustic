@@ -1,14 +1,14 @@
 # RFC-0002: API Reset & Typed Attributes (M1)
 
-- **Status:** Partial
+- **Status:** Partial (amended by RFC-0010)
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
-- **Related:** RFC-0001 (roadmap), RFC-0003 (unblocks feature selection)
+- **Related:** RFC-0001 (roadmap), RFC-0003 (unblocks feature selection), RFC-0010 (host typed attribute storage amendment)
 
 ## 1. Summary
 
-Reset the public API before the feature work starts. Introduce a typed `AttributeValue` enum so LAS fields round-trip losslessly, make NumPy getters true zero-copy tensor views, accept `f64`/`i32`/`i64` input with explicit autocast, fix the miscategorized `RandomSampleStrategy`, and clean up repo hygiene. No new point-cloud algorithms; this RFC is entirely about making M2–M6 cheap to build.
+Reset the public API before the feature work starts. Introduce a typed `AttributeValue` enum so LAS fields round-trip losslessly, preserve NumPy getter dtypes, accept `f64`/`i32`/`i64` input with explicit autocast, fix the miscategorized `RandomSampleStrategy`, and clean up repo hygiene. No new point-cloud algorithms; this RFC is entirely about making M2–M6 cheap to build.
 
 ## 2. Motivation
 
@@ -26,43 +26,49 @@ Per LEO-36 ("forward/backward compatibility is not a constraint"), this is the r
 
 ### 3.1 `AttributeValue` enum
 
+**Amendment:** RFC-0010 supersedes the storage detail in this section. The
+accepted implementation stores typed attributes as host `Vec<T>` values inside
+`AttributeValue`, while XYZ remains tensor-backed. The public dtype-preserving
+contract remains unchanged.
+
 ```rust
-// src/point_cloud/attribute_value.rs (new)
+// src/point_cloud/attribute_value.rs
 pub enum AttributeValue {
-    F32(Tensor1<Backend, f32>),
-    F64(Tensor1<Backend, f64>),
-    U8 (Tensor1<Backend, u8>),
-    U16(Tensor1<Backend, u16>),
-    U32(Tensor1<Backend, u32>),
-    I32(Tensor1<Backend, i32>),
-    I64(Tensor1<Backend, i64>),
-    Bool(Tensor1<Backend, bool>),
+    F32(Vec<f32>),
+    F64(Vec<f64>),
+    U8(Vec<u8>),
+    U16(Vec<u16>),
+    U32(Vec<u32>),
+    I32(Vec<i32>),
+    I64(Vec<i64>),
+    Bool(Vec<bool>),
+    F32x6(Vec<[f32; 6]>),
 }
 
 impl AttributeValue {
     pub fn len(&self) -> usize { /* dispatch */ }
     pub fn dtype(&self) -> AttrDType { /* tag */ }
-    pub fn gather(&self, indices: &Tensor1<Backend, i64>) -> Self { /* M2 hook */ }
+    pub fn gather(&self, indices: &[usize]) -> Result<Self> { /* host typed gather */ }
 }
 ```
 
 `HighPerformancePointCloud.attributes` becomes `HashMap<String, AttributeValue>`. Intensity and RGB become *standard attributes* stored in the same map under reserved names (`"intensity"`, `"red"`, `"green"`, `"blue"`); the dedicated `Option<Tensor1>` fields go away. Convenience accessors (`has_intensity`, `set_intensity`, …) remain on `PointCloud` but are thin wrappers over the attribute map.
 
-Rationale: unifies the storage model, lets M2 express "select where `attributes["classification"] == 2`" without a special case, and removes the RGB f32/u8 inconsistency.
+Rationale: unifies the storage model, lets M2 express "select where `attributes["classification"] == 2`" without a special case, and removes the RGB f32/u8 inconsistency. RFC-0010 accepts host typed storage so the public dtype contract stays exact for LAS/NumPy attributes.
 
-### 3.2 Zero-copy NumPy getters
+### 3.2 NumPy getters
 
-Current path (`src/lib.rs::get_xyz`): `tensor2_to_vec` → `Vec<Vec<f32>>` → flatten → `Array2` → `PyArray2`. Replace with direct `Tensor -> TensorData -> PyArray` on CPU devices. On GPU devices, implement a one-shot `tensor.to_data()` that transfers once, caches nothing, and returns a NumPy array backed by the CPU copy (zero-copy from user's POV, one device→host copy only).
+Current path (`src/lib.rs::get_xyz`): `tensor2_to_vec` → `Vec<Vec<f32>>` → flatten → `Array2` → `PyArray2`. XYZ getter optimization remains open: replace this with a direct `Tensor -> TensorData -> PyArray` path on CPU devices, and a one-shot `tensor.to_data()` transfer on GPU devices.
+
+Typed attribute getters (`get_attribute`, `get_intensity`, `get_rgb`) may return owned NumPy arrays materialized from host typed vectors. Their normative contract is dtype preservation, not zero-copy.
 
 `src/interop/numpy.rs` becomes the single boundary:
 
 ```rust
-pub fn tensor2_to_numpy<T: BurnElement + ToPyObject>(
-    py: Python<'_>, tensor: &Tensor2<Backend, T>,
-) -> PyResult<Bound<'_, PyArray2<T>>> { ... }
+pub fn attribute_to_numpy(py: Python<'_>, attr: &AttributeValue) -> Result<Py<PyAny>>;
 ```
 
-with a blanket `impl` for every dtype the `AttributeValue` enum carries.
+with explicit dispatch for every dtype the `AttributeValue` enum carries.
 
 ### 3.3 Input dtype handling
 
@@ -119,9 +125,9 @@ pc.voxel_downsample(voxel_size: float, strategy: int, *, seed: int | None = None
 
 ## 5. Acceptance criteria
 
-- [ ] `AttributeValue` enum implemented with `Tensor1<_, T>` for the eight listed dtypes. The enum exists for the listed dtypes, but current storage is host `Vec<T>`, not typed Burn tensors.
+- [x] `AttributeValue` enum implemented with exact typed host storage for the listed dtypes, per RFC-0010.
 - [x] Intensity and RGB are stored as standard attributes; the legacy `Option<Tensor1>` fields removed.
-- [ ] `get_xyz`, `get_intensity`, `get_rgb`, `get_attribute` use the new zero-copy path; benchmark shows ≥ 10× speedup on the getter for a 10M-point cloud vs. the current `Vec<Vec<f32>>` materialization.
+- [ ] Typed attribute getters preserve dtype. XYZ getter performance and 10M-point benchmark evidence remain tracked as a separate optimization item.
 - [x] `PointCloud.from_xyz` accepts f32/f64/i32/i64 NumPy; `tests/test_point_cloud.py` adds `test_autocast_f64_input`, `test_autocast_int_input`, `test_reject_string_input`.
 - [x] `DownsampleStrategy` exposes `RANDOM_SEEDED`, `NEAREST_TO_CENTROID`, `AVERAGE`; the legacy middle-index bug is gone; seeded determinism is tested with two runs under the same seed yielding identical outputs.
 - [x] Repo hygiene items in §3.5 shipped; `pyproject.toml::readme` points to `README.md`, RFCs are in MkDocs nav, and the README now points to RFC-0001 for roadmap tracking.
@@ -132,7 +138,7 @@ pc.voxel_downsample(voxel_size: float, strategy: int, *, seed: int | None = None
 
 | Risk | Mitigation |
 |---|---|
-| Burn lacks direct `Tensor1<Backend, u8>` constructors for all needed dtypes | Verify with a spike in the first 2 days; if blocked, lower u8/u16 to `Tensor1<_, i32>` internally and expose the original dtype via a sidecar `AttrDType` tag. Do NOT silently upcast in the Python getter. |
+| Future device-resident attributes may not support all LAS dtypes cleanly | RFC-0010 keeps typed attributes as host vectors unless a future RFC proves exact dtype round-trip, mask/gather, export, and benchmark behavior. |
 | Existing users rely on the middle-index "random" | No users yet (per LEO-36); call out in the release notes. |
 | `ai_doc/` deletion loses historical AI-generated context | Keep one snapshot at `docs/plans/archive/ai_doc-2026-01-31-snapshot.md` in case future agents want to inspect. |
 
