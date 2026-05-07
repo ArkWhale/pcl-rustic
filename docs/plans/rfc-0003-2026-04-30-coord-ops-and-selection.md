@@ -1,6 +1,6 @@
 # RFC-0003: Coordinate Ops & Selection (M2)
 
-- **Status:** Partial (amended by RFC-0010)
+- **Status:** Implemented (amended by RFC-0010/RFC-0011)
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
@@ -134,12 +134,12 @@ Both examples load a test LAS file from `tests/data/` (add a small 10k-point fix
 ## 4. Acceptance criteria
 
 - [x] `select(mask)`, `select_indices(indices)` implemented and tested with host typed attribute propagation per RFC-0010.
-- [ ] `select_where`, `select_by_classification`, `select_return_number`, `select_intensity_range`, `select_elevation_range` implemented and tested with LAS fixtures. Synthetic tests exist, and LAS standard-attribute round-trip coverage now covers `select_by_classification`; full fixture coverage for all selectors is still open.
+- [x] `select_where`, `select_by_classification`, `select_return_number`, `select_intensity_range`, `select_elevation_range` implemented and tested with LAS fixtures.
 - [x] `crop_aabb`, `crop_obb`, `aabb()`, `obb()` implemented and tested.
 - [x] `concatenate(&[&Self], ConcatPolicy)` implemented and tested for all three policies.
 - [x] `translate`, `scale`, `rotate` match Open3D semantics; doc page at `docs/api/transform.md` updated.
-- [ ] Both end-to-end example scripts run to completion against the test fixture, produce expected point-count reductions, and are referenced from `docs/getting-started/examples.md`. The scripts are present and documented, but fixture-backed acceptance is still open.
-- [ ] New tests cover: empty selection / zero-point strict concat, single-cloud concat, dtype-mismatch `ConcatPolicy::Strict` rejection, classification round-trip (LAS → select_by_classification([2]) → LAS → read back → same subset). Empty selection, concat edge cases, and LAS classification round-trip are covered; fixture-backed examples are still open.
+- [x] Both end-to-end example scripts run to completion against the test fixture, produce expected point-count reductions, and are referenced from `docs/getting-started/examples.md`.
+- [x] New tests cover: empty selection / zero-point strict concat, single-cloud concat, dtype-mismatch `ConcatPolicy::Strict` rejection, classification round-trip (LAS → select_by_classification([2]) → LAS → read back → same subset), and fixture-backed examples.
 
 ## 5. Risks & mitigations
 

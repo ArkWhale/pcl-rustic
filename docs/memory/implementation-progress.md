@@ -16,7 +16,7 @@ recorded artifact exists.
 | RFC | Status | Summary |
 |---|---|---|
 | RFC-0002 API Reset & Typed Attributes | Partial (external evidence open), amended by RFC-0010/RFC-0011 | Typed attributes, host typed storage, dtype-preserving typed getters, and new downsample strategies exist; external Multica docs, cross-platform CI evidence, and XYZ getter benchmark evidence remain open. |
-| RFC-0003 Coordinate Ops & Selection | Partial | Selection, generic attribute filters, AABB/OBB crop, concat, transform wrappers, examples, and LAS standard-attribute round-trip coverage exist; fixture-backed examples and device-native selection are still missing. |
+| RFC-0003 Coordinate Ops & Selection | Implemented | Selection, generic attribute filters, AABB/OBB crop, concat, transform wrappers, LAS fixture-backed selector coverage, fixture-backed examples, and LAS standard-attribute round-trip coverage exist. |
 | RFC-0004 GPU Hot Path | Mostly missing | Device transfer hooks exist, but voxel downsample, selection, concat, and benchmarks remain CPU/reference paths. |
 | RFC-0005 KD-tree, Octree, Normals | Implemented (external evidence open) | KD-tree, fallback, octree cell-pruned range search, Python APIs, normals, covariance support, 10k brute-force oracle tests, 10k plane-normal coverage, and KD-tree cache behavior tests exist; 10M benchmark evidence remains open. |
 | RFC-0006 Outlier Removal | Partial, amended by RFC-0010 | SOR/ROR APIs, host masks, docs, synthetic acceptance tests, typed attribute propagation, and LAS standard-attribute propagation coverage exist; custom LAS ExtraBytes propagation and 10M benchmark are missing. |
@@ -209,13 +209,8 @@ implementation.
 
 ### RFC-0003
 
-- Code gap: selection and concat still need XYZ device-residency optimization
-  before RFC-0004 can claim a GPU hot path.
-- Test gap: selectors beyond `select_by_classification` still lack LAS
-  fixture-backed coverage.
-- Fixture gap: no reusable `tests/data` LAS fixture exists.
-- Example gap: end-to-end examples are not fixture-backed and do not assert
-  expected point-count reductions.
+- No repo-local implementation gap remains. Device-residency optimization moved
+  to RFC-0004 and does not block M2 completion.
 
 ### RFC-0004
 

@@ -19,8 +19,8 @@ def build_fixture() -> PointCloud:
     return pc
 
 
-def main() -> None:
-    pc = build_fixture()
+def run_pipeline(pc: PointCloud | None = None) -> PointCloud:
+    pc = build_fixture() if pc is None else pc
     class_voxels = {
         2: 0.5,  # ground
         3: 0.25,  # low vegetation
@@ -41,7 +41,16 @@ def main() -> None:
             continue
         parts.append(clean.voxel_downsample(voxel_size, DownsampleStrategy.AVERAGE))
 
-    merged = PointCloud.concatenate(parts, policy="union")
+    if not parts:
+        raise ValueError(
+            "classification-aware pipeline produced no non-empty partitions"
+        )
+    return PointCloud.concatenate(parts, policy="union")
+
+
+def main() -> None:
+    pc = build_fixture()
+    merged = run_pipeline(pc)
     print(pc.point_count(), merged.point_count())
 
 

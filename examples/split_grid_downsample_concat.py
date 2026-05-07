@@ -13,8 +13,8 @@ def build_fixture() -> PointCloud:
     return pc
 
 
-def main() -> None:
-    pc = build_fixture()
+def run_pipeline(pc: PointCloud | None = None) -> PointCloud:
+    pc = build_fixture() if pc is None else pc
     min_bound, max_bound = pc.aabb()
     min_bound = np.asarray(min_bound, dtype=np.float32)
     max_bound = np.asarray(max_bound, dtype=np.float32)
@@ -39,10 +39,16 @@ def main() -> None:
                 cell.voxel_downsample(voxel, DownsampleStrategy.NEAREST_TO_CENTROID)
             )
 
-    merged = PointCloud.concatenate(parts, policy="union")
+    if not parts:
+        raise ValueError("split-grid pipeline produced no non-empty partitions")
+    return PointCloud.concatenate(parts, policy="union")
+
+
+def main() -> None:
+    pc = build_fixture()
+    merged = run_pipeline(pc)
     print(pc.point_count(), merged.point_count())
 
 
 if __name__ == "__main__":
     main()
-

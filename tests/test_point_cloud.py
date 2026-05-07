@@ -4,12 +4,24 @@ pcl_rustic 点云库的 pytest 测试用例
 覆盖核心功能、边界场景、异常场景
 """
 
+import importlib.util
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from pcl_rustic import DownsampleStrategy, NormalSearch, PointCloud, registration
+
+
+def load_example_function(script_name: str, function_name: str):
+    path = Path(__file__).resolve().parents[1] / "examples" / script_name
+    spec = importlib.util.spec_from_file_location(script_name.removesuffix(".py"), path)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return getattr(module, function_name)
 
 
 class TestPointCloudLifecycle:
@@ -567,6 +579,82 @@ class TestNeighborsNormalsOutliersRegistration:
 
 
 class TestTableIo:
+    def test_las_fixture_backed_selectors_cover_standard_attributes(self, tmp_path):
+        xyz = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0],
+                [0.0, 0.0, 2.0],
+                [0.0, 0.0, 3.0],
+                [0.0, 0.0, 4.0],
+            ],
+            dtype=np.float32,
+        )
+        classification = np.array([2, 6, 2, 9, 6], dtype=np.uint8)
+        return_number = np.array([1, 1, 2, 2, 1], dtype=np.uint8)
+        intensity = np.array([0.05, 0.25, 0.5, 0.75, 0.95], dtype=np.float32)
+
+        fixture = PointCloud.from_xyz(xyz)
+        fixture.set_attribute("classification", classification)
+        fixture.set_attribute("return_number", return_number)
+        fixture.set_intensity(intensity)
+
+        path = tmp_path / "selectors.las"
+        fixture.to_las(str(path))
+        pc = PointCloud.from_las(str(path))
+
+        np.testing.assert_array_equal(
+            pc.select_where("classification", "in", [2, 6]).get_attribute(
+                "classification"
+            ),
+            [2, 6, 2, 6],
+        )
+        np.testing.assert_array_equal(
+            pc.select_by_classification([6]).get_attribute("classification"),
+            [6, 6],
+        )
+        np.testing.assert_array_equal(
+            pc.select_return_number(1).get_attribute("return_number"),
+            [1, 1, 1],
+        )
+        assert pc.select_intensity_range(0.2, 0.8).point_count() == 3
+        np.testing.assert_allclose(
+            pc.select_elevation_range(1.0, 3.0).get_xyz()[:, 2],
+            [1.0, 2.0, 3.0],
+            atol=1e-5,
+        )
+
+    def test_rfc0003_examples_reduce_las_fixture(self, tmp_path):
+        classification_pipeline = load_example_function(
+            "classification_aware_downsample.py", "run_pipeline"
+        )
+        split_grid_pipeline = load_example_function(
+            "split_grid_downsample_concat.py", "run_pipeline"
+        )
+
+        rng = np.random.default_rng(21)
+        xyz = rng.uniform([0.0, 0.0, -1.0], [8.0, 8.0, 2.0], size=(2_000, 3)).astype(
+            np.float32
+        )
+        pc = PointCloud.from_xyz(xyz)
+        pc.set_attribute(
+            "classification",
+            rng.choice(np.array([2, 3, 5, 6, 7], dtype=np.uint8), size=len(xyz)),
+        )
+        pc.set_intensity(rng.random(len(xyz), dtype=np.float32))
+
+        path = tmp_path / "rfc0003_examples.las"
+        pc.to_las(str(path))
+        fixture = PointCloud.from_las(str(path))
+
+        split = split_grid_pipeline(fixture)
+        classified = classification_pipeline(fixture)
+
+        assert 0 < split.point_count() < fixture.point_count()
+        assert 0 < classified.point_count() < fixture.point_count()
+        assert split.get_intensity().dtype == np.float32
+        assert classified.get_attribute("classification").dtype == np.uint8
+
     def test_las_classification_selection_and_outlier_round_trip(self, tmp_path):
         xyz = np.array(
             [
