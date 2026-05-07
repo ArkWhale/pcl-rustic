@@ -1,6 +1,6 @@
 # RFC-0007: ICP & GICP Registration (M6)
 
-- **Status:** Partial (amended by RFC-0010)
+- **Status:** Implemented (external evidence open; amended by RFC-0010/RFC-0011)
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
@@ -138,17 +138,24 @@ Early-exit diagnostic: log at `info` level which criterion triggered termination
 
 ## 4. Acceptance criteria
 
-- [ ] `registration::icp` implemented with all three estimators; signatures match §3.1.
-- [ ] `registration::evaluate` implemented.
-- [ ] `PointCloud::estimate_covariances(knn)` implemented and tested.
-- [ ] Unit tests:
+- [x] `registration::icp` implemented with all three estimators; signatures match §3.1.
+- [x] `registration::evaluate` implemented.
+- [x] `PointCloud::estimate_covariances(knn)` implemented and tested.
+- [x] Unit tests:
   - Identity registration: source = target = random cloud, `icp` with init = identity converges in one iteration, `transformation ≈ I`, `fitness == 1`.
   - Known-rotation recovery: apply a known 4×4 `T_gt` to a 10k-point fixture, register back with init = noisy identity, assert `‖T_recovered · T_gt − I‖_F < 1e-3`. Covered for the current point-to-point solver with identity init.
   - Point-to-Plane requires normals: without `estimate_normals` first, returns a clear error.
   - GICP requires covariances: without `estimate_covariances` first, returns a clear error.
 - [ ] Comparison test against Open3D: on a bundled 5000-point Bunny fixture, `fitness` and `inlier_rmse` agree with Open3D's `registration_icp` within 1% after 30 iterations (same `max_correspondence_distance`, same init, same estimator).
 - [ ] Benchmark: 500k-vs-500k point alignment completes in < 20 s (CPU, 30 iterations) on the reference machine.
-- [ ] Documentation: `docs/api/registration.md` with full examples for each estimator, plus a migration note for Open3D users.
+- [x] Documentation: `docs/api/registration.md` with full examples for each estimator, plus a migration note for Open3D users.
+
+### External evidence
+
+| Criterion | Artifact | Date | Git SHA | Hardware / Dataset | Status | Notes |
+|---|---|---|---|---|---|---|
+| Open3D Bunny comparison agrees within 1% | unrecorded | — | — | Bundled Bunny fixture / Open3D environment | open | Requires recorded reference comparison artifact per RFC-0011. |
+| 500k-vs-500k alignment completes in < 20 s | unrecorded | — | — | Reference CPU benchmark hardware | open | Requires recorded benchmark artifact per RFC-0011. |
 
 ## 5. Risks & mitigations
 

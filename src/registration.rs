@@ -1,6 +1,6 @@
-use crate::point_cloud::core::HighPerformancePointCloud;
+use crate::point_cloud::{attribute_value::AttributeValue, core::HighPerformancePointCloud};
 use crate::utils::error::{PointCloudError, Result};
-use nalgebra::{Matrix3, Matrix4, Vector3, Vector4, SVD};
+use nalgebra::{Matrix3, Matrix4, SMatrix, SVector, Vector3, Vector4, SVD};
 
 #[derive(Clone, Debug)]
 pub struct ICPConvergenceCriteria {
@@ -69,7 +69,7 @@ pub fn icp(
             "max_correspondence_distance must be finite and > 0".to_string(),
         ));
     }
-    match estimation {
+    match &estimation {
         TransformationEstimation::PointToPlane => {
             if !(target.get_attribute("nx").is_some()
                 && target.get_attribute("ny").is_some()
@@ -107,10 +107,21 @@ pub fn icp(
             return metrics(source_xyz.len(), transformation, correspondences);
         }
 
-        // Point-to-plane and GICP share the same correspondence loop. Their
-        // prerequisite attributes are validated above; the update uses the
-        // point-to-point closed form as a stable baseline.
-        let delta = estimate_point_to_point_delta(&transformed, &target_xyz, &correspondences)?;
+        let delta = match &estimation {
+            TransformationEstimation::PointToPoint => {
+                estimate_point_to_point_delta(&transformed, &target_xyz, &correspondences)?
+            }
+            TransformationEstimation::PointToPlane => {
+                estimate_point_to_plane_delta(&transformed, target, &correspondences)?
+            }
+            TransformationEstimation::Generalized { epsilon } => estimate_generalized_delta(
+                &transformed,
+                source,
+                target,
+                &correspondences,
+                *epsilon,
+            )?,
+        };
         transformation = delta * transformation;
         let updated = transform_points(&source_xyz, &transformation);
         let updated_correspondences =
@@ -230,6 +241,151 @@ fn estimate_point_to_point_delta(
     out[(1, 3)] = t[1];
     out[(2, 3)] = t[2];
     Ok(out)
+}
+
+fn estimate_point_to_plane_delta(
+    transformed_source: &[[f32; 3]],
+    target: &HighPerformancePointCloud,
+    correspondences: &[(u64, u64, f32)],
+) -> Result<Matrix4<f32>> {
+    let target_xyz = target.get_xyz_vec();
+    let nx = target
+        .get_attribute("nx")
+        .and_then(|attr| attr.as_f32())
+        .ok_or_else(|| {
+            PointCloudError::InvalidParameter("point-to-plane ICP requires target nx".to_string())
+        })?;
+    let ny = target
+        .get_attribute("ny")
+        .and_then(|attr| attr.as_f32())
+        .ok_or_else(|| {
+            PointCloudError::InvalidParameter("point-to-plane ICP requires target ny".to_string())
+        })?;
+    let nz = target
+        .get_attribute("nz")
+        .and_then(|attr| attr.as_f32())
+        .ok_or_else(|| {
+            PointCloudError::InvalidParameter("point-to-plane ICP requires target nz".to_string())
+        })?;
+
+    let mut normal_matrix = SMatrix::<f32, 6, 6>::zeros();
+    let mut rhs = SVector::<f32, 6>::zeros();
+    for (source_idx, target_idx, _) in correspondences {
+        let source_point = point_vec(transformed_source[*source_idx as usize]);
+        let target_point = point_vec(target_xyz[*target_idx as usize]);
+        let normal = Vector3::new(
+            nx[*target_idx as usize],
+            ny[*target_idx as usize],
+            nz[*target_idx as usize],
+        );
+        if normal.norm_squared() <= f32::EPSILON {
+            continue;
+        }
+        let cross = source_point.cross(&normal);
+        let jacobian = SVector::<f32, 6>::new(
+            cross[0], cross[1], cross[2], normal[0], normal[1], normal[2],
+        );
+        let residual = normal.dot(&(target_point - source_point));
+        normal_matrix += jacobian * jacobian.transpose();
+        rhs += jacobian * residual;
+    }
+
+    let svd = SVD::new(normal_matrix, true, true);
+    let Ok(delta) = svd.solve(&rhs, 1e-6) else {
+        return Err(PointCloudError::InvalidParameter(
+            "point-to-plane normal equations are singular".to_string(),
+        ));
+    };
+    Ok(delta_vector_to_transform(delta))
+}
+
+fn estimate_generalized_delta(
+    transformed_source: &[[f32; 3]],
+    source: &HighPerformancePointCloud,
+    target: &HighPerformancePointCloud,
+    correspondences: &[(u64, u64, f32)],
+    epsilon: f32,
+) -> Result<Matrix4<f32>> {
+    let target_xyz = target.get_xyz_vec();
+    let source_covariances = source
+        .get_attribute("covariance")
+        .and_then(|attr| attr.as_f32x6())
+        .ok_or_else(|| {
+            PointCloudError::InvalidParameter(
+                "generalized ICP requires source covariance attributes".to_string(),
+            )
+        })?;
+    let target_covariances = target
+        .get_attribute("covariance")
+        .and_then(|attr| attr.as_f32x6())
+        .ok_or_else(|| {
+            PointCloudError::InvalidParameter(
+                "generalized ICP requires target covariance attributes".to_string(),
+            )
+        })?;
+
+    let mut normal_matrix = SMatrix::<f32, 6, 6>::zeros();
+    let mut rhs = SVector::<f32, 6>::zeros();
+    for (source_idx, target_idx, _) in correspondences {
+        let source_point = point_vec(transformed_source[*source_idx as usize]);
+        let target_point = point_vec(target_xyz[*target_idx as usize]);
+        let residual = target_point - source_point;
+        let covariance = packed_covariance(source_covariances[*source_idx as usize])
+            + packed_covariance(target_covariances[*target_idx as usize])
+            + Matrix3::identity() * epsilon.max(1e-9);
+        let information = covariance
+            .try_inverse()
+            .unwrap_or_else(|| Matrix3::identity() / epsilon.max(1e-6));
+        let skew = skew_matrix(source_point);
+        let mut jacobian = SMatrix::<f32, 3, 6>::zeros();
+        jacobian.fixed_view_mut::<3, 3>(0, 0).copy_from(&(-skew));
+        jacobian
+            .fixed_view_mut::<3, 3>(0, 3)
+            .copy_from(&Matrix3::identity());
+
+        normal_matrix += jacobian.transpose() * information * jacobian;
+        rhs += jacobian.transpose() * information * residual;
+    }
+
+    let svd = SVD::new(normal_matrix, true, true);
+    let Ok(delta) = svd.solve(&rhs, 1e-6) else {
+        return Err(PointCloudError::InvalidParameter(
+            "GICP normal equations are singular".to_string(),
+        ));
+    };
+    Ok(delta_vector_to_transform(delta))
+}
+
+fn packed_covariance(row: [f32; 6]) -> Matrix3<f32> {
+    Matrix3::new(
+        row[0], row[1], row[2], row[1], row[3], row[4], row[2], row[4], row[5],
+    )
+}
+
+fn skew_matrix(v: Vector3<f32>) -> Matrix3<f32> {
+    Matrix3::new(0.0, -v[2], v[1], v[2], 0.0, -v[0], -v[1], v[0], 0.0)
+}
+
+fn delta_vector_to_transform(delta: SVector<f32, 6>) -> Matrix4<f32> {
+    let rotation = small_angle_rotation(Vector3::new(delta[0], delta[1], delta[2]));
+    let mut out = Matrix4::identity();
+    out.fixed_view_mut::<3, 3>(0, 0).copy_from(&rotation);
+    out[(0, 3)] = delta[3];
+    out[(1, 3)] = delta[4];
+    out[(2, 3)] = delta[5];
+    out
+}
+
+fn small_angle_rotation(omega: Vector3<f32>) -> Matrix3<f32> {
+    let theta = omega.norm();
+    if theta <= 1e-8 {
+        return Matrix3::identity();
+    }
+    let axis = omega / theta;
+    let k = Matrix3::new(
+        0.0, -axis[2], axis[1], axis[2], 0.0, -axis[0], -axis[1], axis[0], 0.0,
+    );
+    Matrix3::identity() + k * theta.sin() + (k * k) * (1.0 - theta.cos())
 }
 
 fn point_vec(point: [f32; 3]) -> Vector3<f32> {
@@ -406,5 +562,70 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.to_string().contains("normals"));
+    }
+
+    #[test]
+    fn point_to_plane_recovers_single_normal_translation() {
+        let source = HighPerformancePointCloud::from_xyz_vec(vec![[0.0, 0.0, 1.0]]).unwrap();
+        let mut target = HighPerformancePointCloud::from_xyz_vec(vec![[0.0, 0.0, 0.0]]).unwrap();
+        target
+            .set_attribute("nx".to_string(), AttributeValue::F32(vec![0.0]))
+            .unwrap();
+        target
+            .set_attribute("ny".to_string(), AttributeValue::F32(vec![0.0]))
+            .unwrap();
+        target
+            .set_attribute("nz".to_string(), AttributeValue::F32(vec![1.0]))
+            .unwrap();
+
+        let result = icp(
+            &source,
+            &target,
+            2.0,
+            Matrix4::identity(),
+            TransformationEstimation::PointToPlane,
+            ICPConvergenceCriteria {
+                max_iteration: 10,
+                relative_fitness: 1e-7,
+                relative_rmse: 1e-7,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.fitness, 1.0);
+        assert!(result.inlier_rmse < 1e-4);
+        assert!((result.transformation[(2, 3)] + 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn generalized_icp_recovers_covariance_weighted_translation() {
+        let source = HighPerformancePointCloud::from_xyz_vec(vec![[0.0, 0.0, 1.0]]).unwrap();
+        let mut target = HighPerformancePointCloud::from_xyz_vec(vec![[0.0, 0.0, 0.0]]).unwrap();
+        let covariance = AttributeValue::F32x6(vec![[1.0, 0.0, 0.0, 1.0, 0.0, 0.001]]);
+        let mut source = source;
+        source
+            .set_attribute("covariance".to_string(), covariance.clone())
+            .unwrap();
+        target
+            .set_attribute("covariance".to_string(), covariance)
+            .unwrap();
+
+        let result = icp(
+            &source,
+            &target,
+            2.0,
+            Matrix4::identity(),
+            TransformationEstimation::Generalized { epsilon: 1e-3 },
+            ICPConvergenceCriteria {
+                max_iteration: 10,
+                relative_fitness: 1e-7,
+                relative_rmse: 1e-7,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.fitness, 1.0);
+        assert!(result.inlier_rmse < 1e-4);
+        assert!((result.transformation[(2, 3)] + 1.0).abs() < 1e-4);
     }
 }

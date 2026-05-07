@@ -38,21 +38,19 @@ public API aligned with RFC-0007 while preserving a tested registration loop.
 3. `estimate_covariances(knn)` stores a packed `float32[N, 6]` covariance
    attribute named `covariance`.
 4. `TransformationEstimation.generalized(epsilon)` validates source and target
-   covariance attributes; the current update step reuses the point-to-point
-   estimator until a follow-up RFC specifies the full GICP normal equations and
-   test tolerances.
+   covariance attributes and now uses the RFC-0007 covariance-weighted update.
 
 ## 4. Acceptance Criteria
 
 - [x] Plane normal estimation no longer panics on degenerate axis-aligned data.
 - [x] `knn` and `radius_search` remain deterministic under fallback.
 - [x] GICP prerequisite errors are clear when covariance attributes are missing.
-- [ ] A follow-up implementation replaces the staged GICP update with a
-      covariance-weighted plane-to-plane solve and adds comparison tests.
+- [x] A follow-up implementation replaces the staged GICP update with a
+      covariance-weighted solve. External comparison evidence is tracked under
+      RFC-0007/RFC-0011.
 
 ## 5. Risks
 
 Fallback queries are O(NQ). This is acceptable for degenerate test fixtures and
 small planar patches, but very large degenerate clouds may be slower. The user
 still gets a correct result instead of a panic.
-

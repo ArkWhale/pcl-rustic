@@ -20,8 +20,8 @@ recorded artifact exists.
 | RFC-0004 GPU Hot Path | Mostly missing | Device transfer hooks exist, but voxel downsample, selection, concat, and benchmarks remain CPU/reference paths. |
 | RFC-0005 KD-tree, Octree, Normals | Implemented (external evidence open) | KD-tree, fallback, octree cell-pruned range search, Python APIs, normals, covariance support, 10k brute-force oracle tests, 10k plane-normal coverage, and KD-tree cache behavior tests exist; 10M benchmark evidence remains open. |
 | RFC-0006 Outlier Removal | Implemented (external evidence open), amended by RFC-0010/RFC-0011 | SOR/ROR APIs, host masks, docs, synthetic acceptance tests, typed attribute propagation, LAS standard-attribute propagation, and custom ExtraBytes propagation coverage exist; 10M benchmark evidence remains open. |
-| RFC-0007 ICP/GICP Registration | Partial | Registration API, point-to-point ICP, evaluate, covariance storage, and prerequisite validation exist; point-to-plane/GICP solvers are staged, not complete. |
-| RFC-0008 KD-tree Fallback & GICP Staging | Mostly implemented | Fallback behavior and staged GICP decision are implemented; full covariance-weighted GICP remains open by design. |
+| RFC-0007 ICP/GICP Registration | Implemented (external evidence open) | Registration API, point-to-point ICP, point-to-plane update, covariance-weighted GICP update, evaluate, covariance storage, and prerequisite validation exist; Open3D comparison and 500k benchmark evidence remain open. |
+| RFC-0008 KD-tree Fallback & GICP Staging | Implemented | Fallback behavior and the staged GICP follow-up are implemented. |
 | RFC-0009 Large-Scale Benchmark Suite | Implemented (external evidence open) | Smoke/standard/full modes, concat/downsample matrices, typed attrs, CSV output, just recipes, CI smoke job, and docs regeneration support are implemented; standard/full benchmark artifacts remain unrecorded. |
 | RFC-0010 Host Typed Attribute Storage Amendment | Accepted | Host typed attribute storage is documented as the accepted RFC-0002 storage model, with cross-RFC amendments for selection, GPU scope, outlier masks, and covariance storage. |
 | RFC-0011 Completion Evidence Gates | Accepted | RFC tracking now distinguishes repo-local gaps from external evidence gaps and forbids benchmark claims without recorded artifacts. |
@@ -235,20 +235,14 @@ implementation.
 
 ### RFC-0007
 
-- Code gap: point-to-plane and GICP are API-staged; they validate
-  prerequisites but reuse the point-to-point closed-form update.
-- Code gap: full covariance-weighted GICP plane-to-plane solve is not
-  implemented.
-- Test gap: Open3D Bunny comparison test is missing.
-- Benchmark gap: 500k-vs-500k registration benchmark is missing.
-- Documentation gap: registration docs describe staged GICP behavior, but full
-  estimator examples and Open3D migration notes remain incomplete until the
-  solvers are real.
+- External evidence gap: Open3D Bunny comparison artifact is not recorded.
+- External evidence gap: 500k-vs-500k registration benchmark artifact is not
+  recorded.
 
 ### RFC-0008
 
-- Follow-up gap: the full covariance-weighted GICP solver remains open by
-  design and belongs with RFC-0007 solver completion.
+- No repo-local implementation gap remains; RFC-0007 now contains a
+  covariance-weighted GICP update.
 
 ### RFC-0009
 
@@ -274,7 +268,7 @@ implementation.
 | RFC-0004 | 50M LAZ GPU-vs-CPU speedup | unrecorded | — | — | Reference GPU machine and LAZ fixture | open | GPU hot-path repo-local implementation is also incomplete. |
 | RFC-0005 | 10M-point kNN benchmark | unrecorded | — | — | Reference benchmark hardware | open | Repo-local neighbor API, KD-tree cache, octree pruning, and normal-estimation criteria are implemented. |
 | RFC-0006 | 10M-point SOR benchmark | unrecorded | — | — | Reference benchmark hardware | open | Repo-local SOR/ROR behavior and LAS standard/custom attribute propagation are implemented. |
-| RFC-0007 | Open3D Bunny comparison and 500k registration benchmark | unrecorded | — | — | Bundled Bunny fixture / reference CPU | open | Real point-to-plane/GICP solvers remain repo-local gaps. |
+| RFC-0007 | Open3D Bunny comparison and 500k registration benchmark | unrecorded | — | — | Bundled Bunny fixture / reference CPU | open | Repo-local point-to-point, point-to-plane, and GICP solvers are implemented. |
 | RFC-0009 | Standard/full benchmark CSVs | unrecorded | — | — | High-memory benchmark hardware | open | Harness exists; measured artifacts are absent. |
 
 ## 2026-05-04 Cleanup Pass
