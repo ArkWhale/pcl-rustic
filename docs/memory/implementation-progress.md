@@ -13,7 +13,7 @@ examples, and automation.
 | RFC-0002 API Reset & Typed Attributes | Partial | Typed attributes and new downsample strategies exist, but attributes are host `Vec<T>` storage and zero-copy getters / getter benchmarks are not implemented. |
 | RFC-0003 Coordinate Ops & Selection | Partial | Selection, generic attribute filters, AABB/OBB crop, concat, transform wrappers, examples, and LAS standard-attribute round-trip coverage exist; fixture-backed examples and device-native selection are still missing. |
 | RFC-0004 GPU Hot Path | Mostly missing | Device transfer hooks exist, but voxel downsample, selection, concat, and benchmarks remain CPU/reference paths. |
-| RFC-0005 KD-tree, Octree, Normals | Partial | KD-tree, fallback, octree, Python APIs, normals, covariance support, 10k brute-force oracle tests, and 10k plane-normal coverage exist; cache tests, pruning, parallel normals, and benchmarks are still missing. |
+| RFC-0005 KD-tree, Octree, Normals | Partial | KD-tree, fallback, octree, Python APIs, normals, covariance support, 10k brute-force oracle tests, 10k plane-normal coverage, and KD-tree cache behavior tests exist; pruning, parallel normals, and benchmarks are still missing. |
 | RFC-0006 Outlier Removal | Partial | SOR/ROR APIs, masks, docs, synthetic acceptance tests, typed attribute propagation, and LAS standard-attribute propagation coverage exist; same-device mask contract, custom LAS ExtraBytes propagation, and 10M benchmark are missing. |
 | RFC-0007 ICP/GICP Registration | Partial | Registration API, point-to-point ICP, evaluate, covariance storage, and prerequisite validation exist; point-to-plane/GICP solvers are staged, not complete. |
 | RFC-0008 KD-tree Fallback & GICP Staging | Mostly implemented | Fallback behavior and staged GICP decision are implemented; full covariance-weighted GICP remains open by design. |
@@ -101,6 +101,9 @@ examples, and automation.
 - `PointCloud` has a lazy `OnceCell` KD-tree cache.
 - KD-tree kNN/radius search and octree range search now have deterministic
   10k-point random-cloud oracle tests against brute force.
+- KD-tree cache behavior is covered: repeated immutable access reuses the
+  cached index, and mutable XYZ access invalidates stale cache state before the
+  next query.
 - Empty KD-tree/octree input errors and non-finite KD-tree input errors are
   covered.
 - Normal estimation coverage now uses a 10k-point synthetic plane and checks
@@ -221,8 +224,6 @@ not upgraded based on API presence alone.
 
 ### RFC-0005
 
-- Test gap: KD-tree cache behavior is implemented but not acceptance-tested for
-  no-rebuild or mutation invalidation.
 - Code gap: octree `range_search` brute-forces over all XYZ rather than pruning
   via octree cells, though correctness is covered by a 10k brute-force oracle.
 - Code gap: normal estimation is not parallelized with `rayon`.
@@ -282,6 +283,17 @@ not upgraded based on API presence alone.
   - RFC-0009 is marked `Implemented`.
 
 ## Verification Snapshot
+
+Fresh verification from the 2026-05-07 RFC-0005 KD-tree cache pass:
+
+- Red check before implementation: `cargo test xyz_mut_invalidates_cached_kdtree --lib`
+  failed because kNN after `xyz_mut()` still answered from the stale cached
+  index (`left: 1`, `right: 0`).
+- Green focused checks after implementation:
+  - `cargo test xyz_mut_invalidates_cached_kdtree --lib` passed.
+  - `cargo test repeated_kdtree_access_reuses_cached_index --lib` passed.
+  - `cargo test neighbors::kdtree::tests --lib` passed: 7/7 KD-tree tests.
+  - `cargo test --lib` passed: 25/25 Rust unit tests.
 
 Fresh verification from the 2026-05-05 RFC-0003 empty-selection pass:
 
@@ -392,8 +404,8 @@ run manually then. CI installs `just` before invoking `just ci`.
    RFC remains literal.
 4. RFC-0003: add a small reusable LAS fixture, run fixture-backed examples, and
    cover remaining LAS selectors.
-5. RFC-0005/RFC-0006: add cache tests, octree pruning, same-device masks,
-   LAS ExtraBytes propagation, and the required 10M kNN/SOR benchmark evidence.
+5. RFC-0005/RFC-0006: add octree pruning, same-device masks, LAS ExtraBytes
+   propagation, and the required 10M kNN/SOR benchmark evidence.
 6. RFC-0009: run standard/full benchmark modes on recorded high-memory hardware
    and regenerate benchmark docs from the resulting CSV files.
 

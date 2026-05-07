@@ -183,6 +183,7 @@ impl HighPerformancePointCloud {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::tensor;
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha8Rng;
 
@@ -299,6 +300,33 @@ mod tests {
             Ok(_) => panic!("non-finite cloud unexpectedly built a KD-tree"),
             Err(err) => assert!(err.to_string().contains("non-finite")),
         }
+    }
+
+    #[test]
+    fn repeated_kdtree_access_reuses_cached_index() {
+        let pc = HighPerformancePointCloud::from_xyz_vec(vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+        ])
+        .unwrap();
+
+        let first = pc.kdtree().unwrap() as *const KdTreeIndex;
+        let second = pc.kdtree().unwrap() as *const KdTreeIndex;
+
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn xyz_mut_invalidates_cached_kdtree() {
+        let mut pc =
+            HighPerformancePointCloud::from_xyz_vec(vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]])
+                .unwrap();
+        assert_eq!(pc.knn(&[[5.1, 0.0, 0.0]], 1).unwrap()[0][0].index, 1);
+
+        *pc.xyz_mut() = tensor::tensor2_from_slice(&[5.0, 0.0, 0.0, 6.0, 0.0, 0.0], 2, 3).unwrap();
+
+        assert_eq!(pc.knn(&[[5.1, 0.0, 0.0]], 1).unwrap()[0][0].index, 0);
     }
 
     fn hit_ids(rows: &[Vec<NeighborHit>]) -> Vec<Vec<u64>> {

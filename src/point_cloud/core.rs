@@ -89,6 +89,7 @@ impl HighPerformancePointCloud {
     }
 
     pub fn xyz_mut(&mut self) -> &mut Tensor2 {
+        self.kdtree_cache = OnceCell::new();
         &mut self.xyz
     }
 
