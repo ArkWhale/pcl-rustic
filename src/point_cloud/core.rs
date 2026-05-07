@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 pub struct HighPerformancePointCloud {
     xyz: Tensor2,
+    xyz_device: tensor::BackendDevice,
     attributes: HashMap<String, AttributeValue>,
     kdtree_cache: OnceCell<KdTreeIndex>,
 }
@@ -16,6 +17,7 @@ impl Clone for HighPerformancePointCloud {
     fn clone(&self) -> Self {
         Self {
             xyz: self.xyz.clone(),
+            xyz_device: self.xyz_device.clone(),
             attributes: self.attributes.clone(),
             kdtree_cache: OnceCell::new(),
         }
@@ -26,12 +28,14 @@ impl HighPerformancePointCloud {
     pub fn new() -> Self {
         Self {
             xyz: tensor::empty_xyz(),
+            xyz_device: tensor::cpu_device(),
             attributes: HashMap::new(),
             kdtree_cache: OnceCell::new(),
         }
     }
 
     pub fn from_tensor_xyz(xyz: Tensor2) -> Result<Self> {
+        let device = xyz.device();
         let cols = tensor::tensor2_cols(&xyz);
         if cols != 3 {
             return Err(PointCloudError::TensorShapeError(format!(
@@ -41,21 +45,40 @@ impl HighPerformancePointCloud {
         }
         Ok(Self {
             xyz,
+            xyz_device: device,
             attributes: HashMap::new(),
             kdtree_cache: OnceCell::new(),
         })
     }
 
+    pub fn empty_on_device(device: tensor::BackendDevice) -> Self {
+        Self {
+            xyz: tensor::empty_xyz(),
+            xyz_device: device,
+            attributes: HashMap::new(),
+            kdtree_cache: OnceCell::new(),
+        }
+    }
+
     pub fn from_xyz_vec(xyz: Vec<[f32; 3]>) -> Result<Self> {
+        let device = tensor::default_device();
+        Self::from_xyz_vec_on_device(xyz, &device)
+    }
+
+    pub fn from_xyz_vec_on_device(
+        xyz: Vec<[f32; 3]>,
+        device: &tensor::BackendDevice,
+    ) -> Result<Self> {
         if xyz.is_empty() {
             return Err(PointCloudError::TensorShapeError(
                 "XYZ data is empty".to_string(),
             ));
         }
         let flat: Vec<f32> = xyz.iter().flat_map(|p| p.iter().copied()).collect();
-        let t = tensor::tensor2_from_slice(&flat, xyz.len(), 3)?;
+        let t = tensor::tensor2_from_slice_on_device(&flat, xyz.len(), 3, device)?;
         Ok(Self {
             xyz: t,
+            xyz_device: device.clone(),
             attributes: HashMap::new(),
             kdtree_cache: OnceCell::new(),
         })
@@ -73,8 +96,10 @@ impl HighPerformancePointCloud {
             ));
         }
         let t = tensor::xyz_to_tensor(xyz)?;
+        let device = t.device();
         Ok(Self {
             xyz: t,
+            xyz_device: device,
             attributes: HashMap::new(),
             kdtree_cache: OnceCell::new(),
         })
@@ -93,7 +118,16 @@ impl HighPerformancePointCloud {
         &mut self.xyz
     }
 
+    pub fn set_xyz(&mut self, xyz: Tensor2) {
+        self.kdtree_cache = OnceCell::new();
+        self.xyz_device = xyz.device();
+        self.xyz = xyz;
+    }
+
     pub fn get_xyz_vec(&self) -> Vec<[f32; 3]> {
+        if self.point_count() == 0 {
+            return Vec::new();
+        }
         let data = tensor::tensor2_to_vec(&self.xyz);
         data.into_iter()
             .map(|row| [row[0], row[1], row[2]])
@@ -101,6 +135,9 @@ impl HighPerformancePointCloud {
     }
 
     pub fn get_xyz_flat(&self) -> Vec<f32> {
+        if self.point_count() == 0 {
+            return Vec::new();
+        }
         let data = self.xyz.to_data();
         data.to_vec::<f32>()
             .expect("Failed to convert XYZ tensor to Vec<f32>")
@@ -112,15 +149,25 @@ impl HighPerformancePointCloud {
     }
 
     pub fn to_device(&self, device: tensor::BackendDevice) -> Self {
+        let xyz = if self.point_count() == 0 {
+            tensor::empty_xyz()
+        } else {
+            self.xyz.clone().to_device(&device)
+        };
         Self {
-            xyz: self.xyz.clone().to_device(&device),
+            xyz,
+            xyz_device: device,
             attributes: self.attributes.clone(),
             kdtree_cache: OnceCell::new(),
         }
     }
 
     pub fn device_name(&self) -> String {
-        format!("{:?}", self.xyz.device())
+        format!("{:?}", self.xyz_device)
+    }
+
+    pub fn xyz_device(&self) -> tensor::BackendDevice {
+        self.xyz_device.clone()
     }
 
     // === Attribute access ===
@@ -205,8 +252,9 @@ impl HighPerformancePointCloud {
     // === Selection primitives (M2) ===
 
     pub fn select_indices(&self, indices: &[usize]) -> Result<Self> {
+        let device = self.xyz_device();
         if indices.is_empty() {
-            let mut result = Self::new();
+            let mut result = Self::empty_on_device(device);
             for (name, attr) in &self.attributes {
                 result
                     .attributes
@@ -227,7 +275,7 @@ impl HighPerformancePointCloud {
         let xyz_vec = self.get_xyz_vec();
         let new_xyz: Vec<[f32; 3]> = indices.iter().map(|&i| xyz_vec[i]).collect();
 
-        let mut result = Self::from_xyz_vec(new_xyz)?;
+        let mut result = Self::from_xyz_vec_on_device(new_xyz, &device)?;
         for (name, attr) in &self.attributes {
             result
                 .attributes

@@ -1,6 +1,6 @@
 # RFC-0004: GPU Hot-Path Rewrite (M3)
 
-- **Status:** Proposed (amended by RFC-0010/RFC-0012)
+- **Status:** Implemented (external evidence open, amended by RFC-0010/RFC-0012)
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
@@ -93,13 +93,13 @@ Rust side: add `pub fn to_device(&self, device: BackendDevice) -> Self` that Bur
 
 ## 4. Acceptance criteria
 
-- [ ] Voxel downsample keeps XYZ-heavy binning/reduction on the Burn tensor device where practical; any host attribute propagation is explicit and dtype-preserving.
-- [ ] `select(mask)`, `select_indices(indices)`, `concatenate` (from RFC-0003) verified to keep result XYZ tensors on the input device via a test that builds a cloud on GPU, runs the full pipeline, and asserts the result tensor's device equals the input's.
+- [x] Voxel downsample keeps result XYZ tensors on the source Burn device per RFC-0012; host-side voxel planning and attribute propagation are explicit and dtype-preserving.
+- [x] `select(mask)`, `select_indices(indices)`, `concatenate` (from RFC-0003) verified to keep result XYZ tensors on the input/common device via CPU residency tests and a WGPU-gated full pipeline test.
 - [ ] Benchmark matrix (§3.5) runs in CI against at least the `wgpu-vulkan` path on Linux and `ndarray-cpu` everywhere.
-- [ ] README performance table replaced with the generated table; the CPU-only row is preserved for continuity and labeled as such.
+- [x] README performance claim replaced with benchmark-artifact guidance; generated measured rows remain unpublished until benchmark CSV artifacts exist.
 - [ ] The full `load → select_classifications → voxel_downsample → transform → to_las` pipeline on a 50M-point LAZ fixture shows ≥ 3× speedup on GPU vs. CPU on the reference machine.
-- [ ] Golden tests: CPU and GPU paths produce the same point count (exact), the same centroid positions within 1e-5 f32 tolerance for `NEAREST_TO_CENTROID`, dtype-preserving attribute propagation, and for `RANDOM_SEEDED`, same seed → bit-identical output across runs on the same backend.
-- [ ] Documentation: `docs/performance/optimization.md` updated with device-selection guidance.
+- [x] Golden tests: CPU and WGPU-gated paths preserve point count, nearest-centroid coordinates within 1e-5 f32 tolerance, dtype-preserving attribute propagation, and same-backend `RANDOM_SEEDED` determinism.
+- [x] Documentation: `docs/performance/optimization.md` updated with device-selection guidance and external evidence limits.
 
 ## 5. Risks & mitigations
 

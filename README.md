@@ -15,7 +15,7 @@
 - 📦 **多格式 I/O**：LAZ/LAS/Parquet/CSV 格式读写
 - 🎯 **类型安全**：完整的类型注解和 `.pyi` 存根文件
 - 🧩 **模块化设计**：typed attributes、选择、邻域、异常点过滤和配准分层实现
-- 📊 **性能优异**：10M 点云体素下采样 ~7s，吞吐量 1.3-1.5M pts/s
+- 📊 **可复现基准**：提供 smoke/standard/full 基准套件；公开性能数字只来自记录的基准产物
 
 ## 📦 安装
 
@@ -138,6 +138,24 @@ pc_down = pc.voxel_downsample(
 - `DownsampleStrategy.RANDOM_SEEDED`：按 seed 随机选择体素内的点
 - `DownsampleStrategy.NEAREST_TO_CENTROID`：选择最接近体素中心的点
 - `DownsampleStrategy.AVERAGE`：输出体素内 XYZ 和属性的聚合值
+
+### 设备选择
+
+```python
+from pcl_rustic import DownsampleStrategy, has_wgpu_device
+
+# XYZ 张量可显式移动到 CPU 或 GPU；typed attributes 保留在 host 侧并保持 dtype
+pc_cpu = pc.to("cpu")
+
+if has_wgpu_device():
+    pc_gpu = pc.to("gpu")
+    down = pc_gpu.voxel_downsample(0.15, DownsampleStrategy.NEAREST_TO_CENTROID)
+    assert down.device() == pc_gpu.device()
+```
+
+当前 GPU hot-path 合同保证选择、拼接、体素下采样和坐标变换的结果 XYZ
+张量保留在输入设备上。GPU 加速倍数只在记录了硬件、数据集、命令和 commit 的
+基准产物后发布。
 
 ### 文件 I/O
 

@@ -11,7 +11,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from pcl_rustic import DownsampleStrategy, NormalSearch, PointCloud, registration
+from pcl_rustic import (
+    DownsampleStrategy,
+    NormalSearch,
+    PointCloud,
+    has_wgpu_device,
+    registration,
+)
 
 
 def load_example_function(script_name: str, function_name: str):
@@ -436,6 +442,87 @@ class TestVoxelDownsample:
         down = pc.voxel_downsample(1.0, DownsampleStrategy.AVERAGE)
         assert down.point_count() == 2
         assert down.get_attribute("classification").dtype == np.uint8
+
+
+class TestDeviceResidency:
+    def _cloud(self):
+        xyz = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [0.2, 0.0, 0.0],
+                [1.2, 0.0, 0.0],
+                [2.2, 0.0, 0.0],
+            ],
+            dtype=np.float32,
+        )
+        pc = PointCloud.from_xyz(xyz).to("cpu")
+        pc.set_attribute("classification", np.array([2, 2, 6, 6], dtype=np.uint8))
+        pc.set_intensity(np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32))
+        return pc
+
+    def test_cpu_selection_concat_voxel_and_transform_preserve_device(self):
+        pc = self._cloud()
+        expected_device = pc.device()
+
+        selected = pc.select(np.array([True, False, True, False], dtype=np.bool_))
+        assert selected.device() == expected_device
+        empty = pc.select_indices([])
+        assert empty.device() == expected_device
+
+        concatenated = PointCloud.concatenate([selected, empty], "strict")
+        assert concatenated.device() == expected_device
+
+        for strategy in (
+            DownsampleStrategy.RANDOM_SEEDED,
+            DownsampleStrategy.NEAREST_TO_CENTROID,
+            DownsampleStrategy.AVERAGE,
+        ):
+            downsampled = pc.voxel_downsample(1.0, strategy, seed=7)
+            assert downsampled.device() == expected_device
+
+        transformed = pc.transform(np.eye(4, dtype=np.float32))
+        assert transformed.device() == expected_device
+
+    def test_cpu_full_pipeline_preserves_device_and_semantics(self):
+        pc = self._cloud()
+        expected_device = pc.device()
+
+        selected = pc.select_by_classification([2, 6])
+        downsampled = selected.voxel_downsample(
+            1.0, DownsampleStrategy.NEAREST_TO_CENTROID
+        )
+        transformed = downsampled.translate([1.0, 0.0, 0.0])
+        result = PointCloud.concatenate([transformed], "strict")
+
+        assert result.device() == expected_device
+        assert result.point_count() == downsampled.point_count()
+        assert result.get_attribute("classification").dtype == np.uint8
+        np.testing.assert_allclose(
+            transformed.get_xyz(),
+            downsampled.get_xyz() + np.array([1.0, 0.0, 0.0], dtype=np.float32),
+            atol=1e-5,
+        )
+
+    def test_gpu_full_pipeline_preserves_device_when_available(self):
+        if not has_wgpu_device():
+            pytest.skip("WGPU adapter unavailable")
+
+        pc = self._cloud().to("gpu")
+        expected_device = pc.device()
+        selected = pc.select_by_classification([2, 6])
+        downsampled = selected.voxel_downsample(
+            1.0, DownsampleStrategy.RANDOM_SEEDED, seed=11
+        )
+        transformed = downsampled.transform(np.eye(4, dtype=np.float32))
+        result = PointCloud.concatenate([transformed], "strict")
+
+        assert result.device() == expected_device
+        np.testing.assert_array_equal(
+            downsampled.get_xyz(),
+            selected.voxel_downsample(
+                1.0, DownsampleStrategy.RANDOM_SEEDED, seed=11
+            ).get_xyz(),
+        )
 
 
 class TestNeighborsNormalsOutliersRegistration:

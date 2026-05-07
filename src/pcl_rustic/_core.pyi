@@ -5,6 +5,8 @@ from numpy.typing import NDArray
 
 NumericArray = NDArray[Any]
 
+def has_wgpu_device() -> bool: ...
+
 class PointCloud:
     def __new__(cls) -> "PointCloud": ...
     @staticmethod

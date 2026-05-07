@@ -86,24 +86,24 @@ not a blocker for marking RFC-0004 repo-local implementation complete.
 
 ## 6. Acceptance Criteria
 
-- [ ] `select(mask)` and `select_indices(indices)` preserve the source XYZ
+- [x] `select(mask)` and `select_indices(indices)` preserve the source XYZ
   device for empty and non-empty results.
-- [ ] `concatenate` preserves the common source XYZ device and errors on
+- [x] `concatenate` preserves the common source XYZ device and errors on
   mixed-device non-empty inputs; all-empty input uses the first cloud's device.
-- [ ] `voxel_downsample` preserves the source XYZ device for
+- [x] `voxel_downsample` preserves the source XYZ device for
   `RANDOM_SEEDED`, `NEAREST_TO_CENTROID`, and `AVERAGE`.
-- [ ] `transform`, `transform_3x3`, `translate`, `scale`, `rotate`, and
+- [x] `transform`, `transform_3x3`, `translate`, `scale`, `rotate`, and
   `rigid_transform` preserve the source XYZ device.
-- [ ] Golden tests cover point count parity, nearest-centroid coordinates within
+- [x] Golden tests cover point count parity, nearest-centroid coordinates within
   `1e-5`, dtype-preserving attribute propagation, and same-backend
   `RANDOM_SEEDED` determinism.
-- [ ] CPU device-residency tests cover selection, concatenation, and the full
+- [x] CPU device-residency tests cover selection, concatenation, and the full
   `select_by_classification -> voxel_downsample -> transform -> concatenate`
   pipeline.
-- [ ] GPU residency coverage is attempted when `WgpuDevice::device_count_total()
+- [x] GPU residency coverage is attempted when `WgpuDevice::device_count_total()
   > 0`; when unavailable, the test runner reports an explicit skip naming WGPU
   adapter unavailability.
-- [ ] README and `docs/performance/optimization.md` document the current device
+- [x] README and `docs/performance/optimization.md` document the current device
   scope and external benchmark evidence requirements without stale CPU-only
   performance claims.
 

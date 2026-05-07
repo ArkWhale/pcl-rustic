@@ -238,13 +238,38 @@ impl HighPerformancePointCloud {
             return Ok(clouds[0].clone());
         }
 
+        let result_device = clouds
+            .iter()
+            .find(|cloud| !cloud.is_empty())
+            .unwrap_or(&clouds[0])
+            .xyz_device();
+        for (i, cloud) in clouds.iter().enumerate() {
+            if !cloud.is_empty() && cloud.xyz_device() != result_device {
+                return Err(PointCloudError::InvalidParameter(format!(
+                    "cannot concatenate non-empty cloud {} on device {:?} with result device {:?}",
+                    i,
+                    cloud.xyz_device(),
+                    result_device
+                )));
+            }
+        }
+
         // Collect all XYZ
         let total_points: usize = clouds.iter().map(|c| c.point_count()).sum();
         let mut all_xyz: Vec<f32> = Vec::with_capacity(total_points * 3);
         for cloud in clouds {
             all_xyz.extend(cloud.get_xyz_flat());
         }
-        let xyz_tensor = tensor::tensor2_from_slice(&all_xyz, total_points, 3)?;
+        let xyz_tensor = if total_points == 0 {
+            None
+        } else {
+            Some(tensor::tensor2_from_slice_on_device(
+                &all_xyz,
+                total_points,
+                3,
+                &result_device,
+            )?)
+        };
 
         // Determine which attributes to include
         let attr_sets: Vec<HashSet<String>> = clouds
@@ -321,7 +346,10 @@ impl HighPerformancePointCloud {
             new_attrs.insert(attr_name.clone(), concatenated);
         }
 
-        let mut result = Self::from_tensor_xyz(xyz_tensor)?;
+        let mut result = match xyz_tensor {
+            Some(xyz_tensor) => Self::from_tensor_xyz(xyz_tensor)?,
+            None => Self::empty_on_device(result_device),
+        };
         *result.attributes_mut() = new_attrs;
         Ok(result)
     }
@@ -384,4 +412,52 @@ fn bool_mask(data: &[bool], op: &str, values: &[f64]) -> Result<Vec<bool>> {
 
 fn identity_rotation() -> [[f32; 3]; 3] {
     [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::tensor;
+
+    #[test]
+    fn selection_and_concat_preserve_cpu_device() {
+        let mut pc =
+            HighPerformancePointCloud::from_xyz_vec(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+                .unwrap()
+                .to_device(tensor::cpu_device());
+        pc.set_attribute("classification".to_string(), AttributeValue::U8(vec![2, 6]))
+            .unwrap();
+        let device = pc.xyz_device();
+
+        let selected = pc.select_indices(&[0]).unwrap();
+        assert_eq!(selected.xyz_device(), device);
+        let empty = pc.select_indices(&[]).unwrap();
+        assert_eq!(empty.xyz_device(), device);
+        let concatenated =
+            HighPerformancePointCloud::concatenate(&[&selected, &empty], ConcatPolicy::Strict)
+                .unwrap();
+        assert_eq!(concatenated.xyz_device(), device);
+    }
+
+    #[test]
+    fn concatenate_rejects_mixed_non_empty_devices_when_gpu_available() {
+        if !tensor::has_wgpu_device() {
+            return;
+        }
+        let cpu = HighPerformancePointCloud::from_xyz_vec(vec![[0.0, 0.0, 0.0]])
+            .unwrap()
+            .to_device(tensor::cpu_device());
+        let gpu = HighPerformancePointCloud::from_xyz_vec(vec![[1.0, 0.0, 0.0]])
+            .unwrap()
+            .to_device(tensor::gpu_device());
+
+        let err = match HighPerformancePointCloud::concatenate(&[&cpu, &gpu], ConcatPolicy::Strict)
+        {
+            Ok(_) => panic!("mixed-device concatenation should fail"),
+            Err(err) => err,
+        };
+        assert!(err
+            .to_string()
+            .contains("cannot concatenate non-empty cloud"));
+    }
 }

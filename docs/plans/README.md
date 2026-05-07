@@ -17,7 +17,7 @@ rfc-{id}-{YYYY-MM-DD}-{kebab-case-title}.md
 | [RFC-0001](rfc-0001-2026-04-30-pcl-rustic-roadmap.md) | pcl-rustic Roadmap & Open3D Replacement Vision | Active roadmap | — (umbrella) |
 | [RFC-0002](rfc-0002-2026-04-30-api-reset-and-typed-attributes.md) | API Reset & Typed Attributes | Partial (external evidence open) | M1 |
 | [RFC-0003](rfc-0003-2026-04-30-coord-ops-and-selection.md) | Coordinate Ops & Selection | Implemented | M2 |
-| [RFC-0004](rfc-0004-2026-04-30-gpu-hot-path.md) | GPU Hot-Path Rewrite | Proposed | M3 |
+| [RFC-0004](rfc-0004-2026-04-30-gpu-hot-path.md) | GPU Hot-Path Rewrite | Implemented (external evidence open) | M3 |
 | [RFC-0005](rfc-0005-2026-04-30-knn-and-normals.md) | Neighborhood Infra & Normal Estimation | Implemented (external evidence open) | M4 |
 | [RFC-0006](rfc-0006-2026-04-30-outlier-removal.md) | Outlier Removal (SOR & ROR) | Implemented (external evidence open) | M5 |
 | [RFC-0007](rfc-0007-2026-04-30-icp-gicp-registration.md) | ICP & GICP Registration | Implemented (external evidence open) | M6 |

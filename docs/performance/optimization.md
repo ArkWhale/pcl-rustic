@@ -47,6 +47,33 @@ if not xyz.flags['C_CONTIGUOUS']:
 
 ## 体素下采样优化
 
+### 设备驻留范围
+
+`PointCloud.to("cpu")` 和 `PointCloud.to("gpu")` 会移动 XYZ 张量；LAS/NumPy
+typed attributes 仍保留在 host 侧并保持原始 dtype。按 RFC-0012，以下操作会让
+结果 XYZ 保持在输入设备上：
+
+- `select(mask)` 和 `select_indices(indices)`
+- `PointCloud.concatenate(...)`，要求非空输入使用同一设备
+- `voxel_downsample(...)` 的 `RANDOM_SEEDED`、`NEAREST_TO_CENTROID`、`AVERAGE`
+- `transform`、`translate`、`scale`、`rotate`、`rigid_transform`
+
+这是一项设备驻留保证，不等同于 GPU 加速声明。GPU/CPU 加速倍数只会在
+`docs/performance/benchmarks.md` 记录了 commit、硬件、数据集、后端、命令和结果
+之后发布。
+
+```python
+from pcl_rustic import DownsampleStrategy, PointCloud, has_wgpu_device
+
+pc = PointCloud.from_las("input.laz").to("cpu")
+
+if has_wgpu_device():
+    pc = pc.to("gpu")
+
+down = pc.voxel_downsample(0.15, DownsampleStrategy.NEAREST_TO_CENTROID)
+assert down.device() == pc.device()
+```
+
 ### 选择合适的体素大小
 
 体素大小应该根据点云密度和应用需求选择：
@@ -403,19 +430,16 @@ pc = PointCloud.from_xyz(xyz)
 - [ ] 进行了性能分析
 - [ ] 监控了内存使用
 
-## 性能目标
+## 性能证据
 
-根据我们的基准测试，以下是合理的性能目标：
+本仓库不发布未记录产物的性能数字。运行 `just benchmark-smoke`、
+`just benchmark-standard` 或 `just benchmark-full` 后，使用
+`just benchmark-docs` 从 CSV 产物刷新 `docs/performance/benchmarks.md`。
+标准和完整基准应记录 commit、硬件、驱动、后端、数据集或 fixture hash、命令、
+输出点数、wall time 和吞吐量。
 
-| 操作 | 目标性能 |
-|------|---------|
-| 体素下采样 (10M) | < 10 秒 |
-| 体素下采样 (50M) | < 50 秒 |
-| 读取 LAZ (1GB) | < 30 秒 |
-| 写入 LAZ (1GB) | < 40 秒 |
-| 坐标变换 (10M) | < 1 秒 |
-
-如果你的性能低于这些目标，请参考本指南进行优化。
+如果本地性能不符合预期，请先保存 benchmark CSV，再参考本指南检查数据类型、
+数组布局、体素大小、内存和 I/O。
 
 ## 下一步
 

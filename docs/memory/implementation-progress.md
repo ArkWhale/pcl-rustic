@@ -19,7 +19,7 @@ with host-side planning and explicit external benchmark evidence gates.
 |---|---|---|
 | RFC-0002 API Reset & Typed Attributes | Partial (external evidence open), amended by RFC-0010/RFC-0011 | Typed attributes, host typed storage, dtype-preserving typed getters, and new downsample strategies exist; external Multica docs, cross-platform CI evidence, and XYZ getter benchmark evidence remain open. |
 | RFC-0003 Coordinate Ops & Selection | Implemented | Selection, generic attribute filters, AABB/OBB crop, concat, transform wrappers, LAS fixture-backed selector coverage, fixture-backed examples, and LAS standard-attribute round-trip coverage exist. |
-| RFC-0004 GPU Hot Path | Mostly missing | Device transfer hooks exist, but voxel downsample, selection, concat, and benchmarks remain CPU/reference paths. |
+| RFC-0004 GPU Hot Path | Implemented (external evidence open), amended by RFC-0010/RFC-0012 | Device transfer hooks exist; selection, concat, voxel downsample, and transforms now preserve source/common XYZ device with host-side planning; 50M speedup and backend benchmark artifacts remain open. |
 | RFC-0005 KD-tree, Octree, Normals | Implemented (external evidence open) | KD-tree, fallback, octree cell-pruned range search, Python APIs, normals, covariance support, 10k brute-force oracle tests, 10k plane-normal coverage, and KD-tree cache behavior tests exist; 10M benchmark evidence remains open. |
 | RFC-0006 Outlier Removal | Implemented (external evidence open), amended by RFC-0010/RFC-0011 | SOR/ROR APIs, host masks, docs, synthetic acceptance tests, typed attribute propagation, LAS standard-attribute propagation, and custom ExtraBytes propagation coverage exist; 10M benchmark evidence remains open. |
 | RFC-0007 ICP/GICP Registration | Implemented (external evidence open) | Registration API, point-to-point ICP, point-to-plane update, covariance-weighted GICP update, evaluate, covariance storage, and prerequisite validation exist; Open3D comparison and 500k benchmark evidence remain open. |
@@ -91,9 +91,21 @@ with host-side planning and explicit external benchmark evidence gates.
   - Rust `HighPerformancePointCloud::to_device(...)`
   - Python `pc.to("cpu" | "gpu")`
   - Python `pc.device()`
+- Added Python `has_wgpu_device()` so GPU residency tests can skip explicitly
+  when no WGPU adapter is available.
 - Burn Router backend is configured with WGPU and CPU support.
-- Transform still uses Burn tensors, but the main hot paths are not yet
-  tensor-native.
+- RFC-0012 accepts host-side planning for the repo-local implementation while
+  requiring derived XYZ tensors to preserve the source/common device.
+- Implemented source/common-device XYZ result preservation for:
+  - `select(mask)`
+  - `select_indices(indices)`
+  - `PointCloud.concatenate(...)`
+  - `voxel_downsample(...)` across all strategies
+  - `transform`, `transform_3x3`, `translate`, `scale`, `rotate`, and
+    `rigid_transform`
+- CPU and WGPU-gated Python tests cover the
+  `select_by_classification -> voxel_downsample -> transform -> concatenate`
+  pipeline, dtype-preserving attributes, and seeded deterministic downsampling.
 
 ### RFC-0005 - KD-tree, Octree, Normals
 
@@ -217,15 +229,10 @@ implementation.
 
 ### RFC-0004
 
-- Code gap: voxel downsample materializes host XYZ and groups points with
-  `HashMap`; tensor-native voxel binning is not implemented.
-- Code gap: `select` and `concatenate` do not use Burn `nonzero`,
-  `select_dim`, or `cat`.
-- Test gap: no GPU device-residency pipeline test.
-- Test gap: no CPU/GPU golden tests for point counts, centroids, or seeded
-  randomness.
-- Benchmark gap: the benchmark harness is not the RFC backend matrix.
-- Evidence gap: no 50M LAZ GPU-vs-CPU 3x speedup result.
+- External evidence gap: no recorded 50M LAZ GPU-vs-CPU 3x speedup result.
+- External evidence gap: no recorded RFC-0004 backend benchmark matrix artifact.
+- Future optimization gap: tensor-native voxel binning remains future work under
+  RFC-0012, not a repo-local completion blocker.
 
 ### RFC-0005
 

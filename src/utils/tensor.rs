@@ -35,6 +35,10 @@ pub fn default_device() -> BackendDevice {
     }
 }
 
+pub fn has_wgpu_device() -> bool {
+    WgpuDevice::device_count_total() > 0
+}
+
 /// Get a GPU device if available
 #[allow(dead_code)]
 pub fn gpu_device() -> BackendDevice {
@@ -65,6 +69,16 @@ pub fn tensor1_from_slice(data: &[f32]) -> Tensor1 {
 
 /// 从 flat &[f32] 创建 Tensor2，形状为 [rows, cols]
 pub fn tensor2_from_slice(data: &[f32], rows: usize, cols: usize) -> Result<Tensor2> {
+    let device = default_device();
+    tensor2_from_slice_on_device(data, rows, cols, &device)
+}
+
+pub fn tensor2_from_slice_on_device(
+    data: &[f32],
+    rows: usize,
+    cols: usize,
+    device: &BackendDevice,
+) -> Result<Tensor2> {
     if data.len() != rows * cols {
         return Err(PointCloudError::TensorShapeError(format!(
             "数据长度{}与形状[{},{}]不匹配",
@@ -74,11 +88,10 @@ pub fn tensor2_from_slice(data: &[f32], rows: usize, cols: usize) -> Result<Tens
         )));
     }
     if data.is_empty() {
-        return Ok(Tensor::<Backend, 2>::zeros([rows, cols], &cpu_device()));
+        return Ok(Tensor::<Backend, 2>::zeros([rows, cols], device));
     }
     let tensor_data = TensorData::from(data);
-    let tensor =
-        Tensor::<Backend, 1>::from_data(tensor_data, &default_device()).reshape([rows, cols]);
+    let tensor = Tensor::<Backend, 1>::from_data(tensor_data, device).reshape([rows, cols]);
     Ok(tensor)
 }
 
@@ -190,6 +203,11 @@ pub fn validate_matrix_shape(matrix: &[Vec<f32>]) -> Result<(usize, usize)> {
 
 /// Vec<Vec<f32>> -> Tensor<[M,N]>
 pub fn vec2_to_tensor(data: Vec<Vec<f32>>) -> Result<Tensor2> {
+    let device = default_device();
+    vec2_to_tensor_on_device(data, &device)
+}
+
+pub fn vec2_to_tensor_on_device(data: Vec<Vec<f32>>, device: &BackendDevice) -> Result<Tensor2> {
     if data.is_empty() {
         return Err(PointCloudError::TensorShapeError("数据为空".to_string()));
     }
@@ -204,8 +222,7 @@ pub fn vec2_to_tensor(data: Vec<Vec<f32>>) -> Result<Tensor2> {
 
     let flat: Vec<f32> = data.into_iter().flatten().collect();
     let tensor_data = TensorData::from(flat.as_slice());
-    let tensor =
-        Tensor::<Backend, 1>::from_data(tensor_data, &default_device()).reshape([rows, cols]);
+    let tensor = Tensor::<Backend, 1>::from_data(tensor_data, device).reshape([rows, cols]);
     Ok(tensor)
 }
 

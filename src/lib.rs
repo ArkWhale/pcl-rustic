@@ -22,6 +22,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDownsampleStrategy>()?;
     m.add_class::<PyNormalSearch>()?;
     m.add_class::<PyOctree>()?;
+    m.add_function(wrap_pyfunction!(py_has_wgpu_device, m)?)?;
     let reg = PyModule::new(m.py(), "registration")?;
     reg.add_class::<PyICPConvergenceCriteria>()?;
     reg.add_class::<PyTransformationEstimation>()?;
@@ -30,6 +31,11 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     reg.add_function(wrap_pyfunction!(py_evaluate, &reg)?)?;
     m.add_submodule(&reg)?;
     Ok(())
+}
+
+#[pyfunction(name = "has_wgpu_device")]
+fn py_has_wgpu_device() -> bool {
+    crate::utils::tensor::has_wgpu_device()
 }
 
 #[pyclass(name = "PointCloud")]

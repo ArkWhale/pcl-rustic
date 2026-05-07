@@ -6,8 +6,12 @@ use burn::tensor::{Tensor, TensorData};
 
 impl HighPerformancePointCloud {
     pub fn transform(&self, matrix: &[[f32; 4]; 4]) -> Result<Self> {
+        if self.point_count() == 0 {
+            return Ok(self.clone());
+        }
+        let device = self.xyz_device();
         let flat: Vec<f32> = matrix.iter().flat_map(|row| row.iter().copied()).collect();
-        let mat_tensor = tensor::tensor2_from_slice(&flat, 4, 4)?;
+        let mat_tensor = tensor::tensor2_from_slice_on_device(&flat, 4, 4, &device)?;
         let mat_t = mat_tensor.transpose();
 
         let xyz = self.xyz_ref().clone();
@@ -15,8 +19,7 @@ impl HighPerformancePointCloud {
 
         // Build homogeneous coordinates [N, 4]
         let ones_data = TensorData::from(vec![1.0f32; n].as_slice());
-        let ones =
-            Tensor::<Backend, 1>::from_data(ones_data, &tensor::default_device()).reshape([n, 1]);
+        let ones = Tensor::<Backend, 1>::from_data(ones_data, &device).reshape([n, 1]);
         let homo = Tensor::cat(vec![xyz, ones], 1); // [N, 4]
         let transformed = homo.matmul(mat_t); // [N, 4]
 
@@ -26,40 +29,50 @@ impl HighPerformancePointCloud {
         let new_xyz = new_xyz / w;
 
         let mut result = self.clone();
-        *result.xyz_mut() = new_xyz;
+        result.set_xyz(new_xyz);
         Ok(result)
     }
 
     pub fn transform_3x3(&self, matrix: &[[f32; 3]; 3]) -> Result<Self> {
+        if self.point_count() == 0 {
+            return Ok(self.clone());
+        }
+        let device = self.xyz_device();
         let flat: Vec<f32> = matrix.iter().flat_map(|row| row.iter().copied()).collect();
-        let mat_tensor = tensor::tensor2_from_slice(&flat, 3, 3)?;
+        let mat_tensor = tensor::tensor2_from_slice_on_device(&flat, 3, 3, &device)?;
         let mat_t = mat_tensor.transpose();
 
         let xyz = self.xyz_ref().clone();
         let new_xyz = xyz.matmul(mat_t);
 
         let mut result = self.clone();
-        *result.xyz_mut() = new_xyz;
+        result.set_xyz(new_xyz);
         Ok(result)
     }
 
     pub fn translate(&self, t: [f32; 3]) -> Result<Self> {
+        if self.point_count() == 0 {
+            return Ok(self.clone());
+        }
+        let device = self.xyz_device();
         let translation_data = TensorData::from(t.as_slice());
         let translation_tensor =
-            Tensor::<Backend, 1>::from_data(translation_data, &tensor::default_device())
-                .reshape([1, 3]);
+            Tensor::<Backend, 1>::from_data(translation_data, &device).reshape([1, 3]);
 
         let mut result = self.clone();
         let new_xyz = self.xyz_ref().clone() + translation_tensor;
-        *result.xyz_mut() = new_xyz;
+        result.set_xyz(new_xyz);
         Ok(result)
     }
 
     pub fn scale(&self, s: f32, center: Option<[f32; 3]>) -> Result<Self> {
+        if self.point_count() == 0 {
+            return Ok(self.clone());
+        }
+        let device = self.xyz_device();
         let center = center.unwrap_or_else(|| self.compute_centroid_xyz());
         let center_data = TensorData::from(center.as_slice());
-        let center_tensor =
-            Tensor::<Backend, 1>::from_data(center_data, &tensor::default_device()).reshape([1, 3]);
+        let center_tensor = Tensor::<Backend, 1>::from_data(center_data, &device).reshape([1, 3]);
 
         let xyz = self.xyz_ref().clone();
         let centered = xyz - center_tensor.clone();
@@ -67,18 +80,21 @@ impl HighPerformancePointCloud {
         let new_xyz = scaled + center_tensor;
 
         let mut result = self.clone();
-        *result.xyz_mut() = new_xyz;
+        result.set_xyz(new_xyz);
         Ok(result)
     }
 
     pub fn rotate(&self, r: &[[f32; 3]; 3], center: Option<[f32; 3]>) -> Result<Self> {
+        if self.point_count() == 0 {
+            return Ok(self.clone());
+        }
+        let device = self.xyz_device();
         let center = center.unwrap_or_else(|| self.compute_centroid_xyz());
         let center_data = TensorData::from(center.as_slice());
-        let center_tensor =
-            Tensor::<Backend, 1>::from_data(center_data, &tensor::default_device()).reshape([1, 3]);
+        let center_tensor = Tensor::<Backend, 1>::from_data(center_data, &device).reshape([1, 3]);
 
         let flat: Vec<f32> = r.iter().flat_map(|row| row.iter().copied()).collect();
-        let rot_tensor = tensor::tensor2_from_slice(&flat, 3, 3)?;
+        let rot_tensor = tensor::tensor2_from_slice_on_device(&flat, 3, 3, &device)?;
         let rot_t = rot_tensor.transpose();
 
         let xyz = self.xyz_ref().clone();
@@ -87,29 +103,32 @@ impl HighPerformancePointCloud {
         let new_xyz = rotated + center_tensor;
 
         let mut result = self.clone();
-        *result.xyz_mut() = new_xyz;
+        result.set_xyz(new_xyz);
         Ok(result)
     }
 
     pub fn rigid_transform(&self, rotation: &[[f32; 3]; 3], translation: [f32; 3]) -> Result<Self> {
+        if self.point_count() == 0 {
+            return Ok(self.clone());
+        }
+        let device = self.xyz_device();
         let flat: Vec<f32> = rotation
             .iter()
             .flat_map(|row| row.iter().copied())
             .collect();
-        let rot_tensor = tensor::tensor2_from_slice(&flat, 3, 3)?;
+        let rot_tensor = tensor::tensor2_from_slice_on_device(&flat, 3, 3, &device)?;
         let rot_t = rot_tensor.transpose();
 
         let translation_data = TensorData::from(translation.as_slice());
         let translation_tensor =
-            Tensor::<Backend, 1>::from_data(translation_data, &tensor::default_device())
-                .reshape([1, 3]);
+            Tensor::<Backend, 1>::from_data(translation_data, &device).reshape([1, 3]);
 
         let xyz = self.xyz_ref().clone();
         let rotated = xyz.matmul(rot_t);
         let new_xyz = rotated + translation_tensor;
 
         let mut result = self.clone();
-        *result.xyz_mut() = new_xyz;
+        result.set_xyz(new_xyz);
         Ok(result)
     }
 
@@ -165,5 +184,40 @@ mod tests {
         assert!((xyz[0][0] - 2.0).abs() < 1e-5);
         assert!((xyz[0][1] - 2.0).abs() < 1e-5);
         assert!((xyz[0][2] - 3.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn transforms_preserve_source_device() {
+        let pc = HighPerformancePointCloud::from_xyz_vec(vec![[1.0, 0.0, 0.0]])
+            .unwrap()
+            .to_device(crate::utils::tensor::cpu_device());
+        let device = pc.xyz_device();
+        let identity3 = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+        let identity4 = [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ];
+
+        assert_eq!(pc.transform(&identity4).unwrap().xyz_device(), device);
+        assert_eq!(pc.transform_3x3(&identity3).unwrap().xyz_device(), device);
+        assert_eq!(pc.translate([1.0, 0.0, 0.0]).unwrap().xyz_device(), device);
+        assert_eq!(
+            pc.scale(2.0, Some([0.0, 0.0, 0.0])).unwrap().xyz_device(),
+            device
+        );
+        assert_eq!(
+            pc.rotate(&identity3, Some([0.0, 0.0, 0.0]))
+                .unwrap()
+                .xyz_device(),
+            device
+        );
+        assert_eq!(
+            pc.rigid_transform(&identity3, [0.0, 0.0, 0.0])
+                .unwrap()
+                .xyz_device(),
+            device
+        );
     }
 }

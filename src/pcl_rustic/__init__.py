@@ -4,7 +4,14 @@
 基于Burn张量库的批量张量运算，支持LAZ/LAS/Parquet/CSV多格式I/O
 """
 
-from ._core import DownsampleStrategy, NormalSearch, Octree, PointCloud, registration
+from ._core import (
+    DownsampleStrategy,
+    NormalSearch,
+    Octree,
+    PointCloud,
+    has_wgpu_device,
+    registration,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -12,5 +19,6 @@ __all__ = [
     "DownsampleStrategy",
     "NormalSearch",
     "Octree",
+    "has_wgpu_device",
     "registration",
 ]

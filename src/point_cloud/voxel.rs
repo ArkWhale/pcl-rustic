@@ -146,7 +146,8 @@ impl HighPerformancePointCloud {
             }
         }
 
-        let mut result = Self::from_xyz_vec(new_xyz)?;
+        let device = self.xyz_device();
+        let mut result = Self::from_xyz_vec_on_device(new_xyz, &device)?;
         result.attributes_mut().extend(new_attrs);
         Ok(result)
     }
