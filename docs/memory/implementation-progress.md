@@ -1,25 +1,30 @@
-# Implementation Progress - RFC 0002-0010
+# Implementation Progress - RFC 0002-0011
 
-## Current Status: API Surface Broadly Present; Acceptance Criteria Still Partial
+## Current Status: API Surface Broadly Present; Repo-Local And External Evidence Split
 
 Last updated: 2026-05-07.
 
 This review used read-only subagent audits split across RFC-0002 through RFC-0005
 and RFC-0006 through RFC-0009, plus a local pass over source, tests, docs,
 examples, and automation. RFC-0010 was added on 2026-05-07 as a storage
-amendment to RFC-0002.
+amendment to RFC-0002. RFC-0011 was added on 2026-05-07 to separate
+repo-local implementation completion from external evidence gates such as
+high-memory benchmarks, cross-platform hosted CI, GPU speedup measurements, and
+external workspace documents. External evidence remains unclaimed until a
+recorded artifact exists.
 
 | RFC | Status | Summary |
 |---|---|---|
-| RFC-0002 API Reset & Typed Attributes | Partial, amended by RFC-0010 | Typed attributes, host typed storage, and new downsample strategies exist; XYZ getter optimization / getter benchmarks are not implemented. |
+| RFC-0002 API Reset & Typed Attributes | Partial (external evidence open), amended by RFC-0010/RFC-0011 | Typed attributes, host typed storage, dtype-preserving typed getters, and new downsample strategies exist; external Multica docs, cross-platform CI evidence, and XYZ getter benchmark evidence remain open. |
 | RFC-0003 Coordinate Ops & Selection | Partial | Selection, generic attribute filters, AABB/OBB crop, concat, transform wrappers, examples, and LAS standard-attribute round-trip coverage exist; fixture-backed examples and device-native selection are still missing. |
 | RFC-0004 GPU Hot Path | Mostly missing | Device transfer hooks exist, but voxel downsample, selection, concat, and benchmarks remain CPU/reference paths. |
 | RFC-0005 KD-tree, Octree, Normals | Partial | KD-tree, fallback, octree, Python APIs, normals, covariance support, 10k brute-force oracle tests, 10k plane-normal coverage, and KD-tree cache behavior tests exist; pruning, parallel normals, and benchmarks are still missing. |
 | RFC-0006 Outlier Removal | Partial, amended by RFC-0010 | SOR/ROR APIs, host masks, docs, synthetic acceptance tests, typed attribute propagation, and LAS standard-attribute propagation coverage exist; custom LAS ExtraBytes propagation and 10M benchmark are missing. |
 | RFC-0007 ICP/GICP Registration | Partial | Registration API, point-to-point ICP, evaluate, covariance storage, and prerequisite validation exist; point-to-plane/GICP solvers are staged, not complete. |
 | RFC-0008 KD-tree Fallback & GICP Staging | Mostly implemented | Fallback behavior and staged GICP decision are implemented; full covariance-weighted GICP remains open by design. |
-| RFC-0009 Large-Scale Benchmark Suite | Mostly implemented | Smoke/standard/full modes, concat/downsample matrices, typed attrs, CSV output, just recipes, CI smoke job, and docs regeneration support are implemented; standard/full benchmark runs remain unexecuted. |
+| RFC-0009 Large-Scale Benchmark Suite | Implemented (external evidence open) | Smoke/standard/full modes, concat/downsample matrices, typed attrs, CSV output, just recipes, CI smoke job, and docs regeneration support are implemented; standard/full benchmark artifacts remain unrecorded. |
 | RFC-0010 Host Typed Attribute Storage Amendment | Accepted | Host typed attribute storage is documented as the accepted RFC-0002 storage model, with cross-RFC amendments for selection, GPU scope, outlier masks, and covariance storage. |
+| RFC-0011 Completion Evidence Gates | Accepted | RFC tracking now distinguishes repo-local gaps from external evidence gaps and forbids benchmark claims without recorded artifacts. |
 
 ## Implemented Evidence
 
@@ -188,17 +193,19 @@ amendment to RFC-0002.
 
 ## Important Gaps By RFC
 
-This section is the current implementation backlog. It intentionally separates
-code gaps, acceptance-test gaps, and benchmark/evidence gaps so RFC status is
-not upgraded based on API presence alone.
+This section is the current implementation backlog. Per RFC-0011, repo-local
+code/test/docs gaps keep an RFC `Partial`; external evidence gaps remain
+unchecked and visible but do not by themselves imply missing repo-local
+implementation.
 
 ### RFC-0002
 
-- Code gap: `get_xyz()` clones/materializes arrays; the XYZ getter optimization
-  path is not implemented.
-- Evidence gap: no 10M-point XYZ getter benchmark or documented speedup.
+- External evidence gap: no 10M-point XYZ getter benchmark or documented
+  speedup artifact is recorded.
 - External-doc gap: `multica-home/knowledge/projects/pcl-rustic.md` is not
   present in this repo.
+- External evidence gap: no recorded Linux/macOS/Windows `just ci` matrix is
+  attached to this repo-local status pass.
 
 ### RFC-0003
 
@@ -254,11 +261,30 @@ not upgraded based on API presence alone.
 
 ### RFC-0009
 
-- Evidence gap: standard and full benchmark modes have not been executed
-  locally; they require high-memory benchmark hardware.
-- Documentation gap: the docs renderer exists, but release benchmark results
-  still need to be produced on recorded hardware before publishing measured
-  performance rows.
+- External evidence gap: standard and full benchmark modes have not been
+  executed on recorded high-memory benchmark hardware.
+- Documentation evidence gap: the docs renderer exists, but release benchmark
+  results still need to be produced on recorded hardware before publishing
+  measured performance rows.
+
+### RFC-0011
+
+- No implementation gap remains in the tracking RFC itself.
+- Ongoing requirement: every future benchmark or external-evidence claim must
+  cite an artifact with the RFC-0011 evidence fields.
+
+## External Evidence Register
+
+| RFC | Criterion | Artifact | Date | Git SHA | Hardware / Dataset | Status | Notes |
+|---|---|---|---|---|---|---|---|
+| RFC-0002 | `multica-home/knowledge/projects/pcl-rustic.md` written | unrecorded | — | — | Multica workspace | open | Outside this repository. |
+| RFC-0002 | `just ci` green on Linux, macOS, Windows | unrecorded | — | — | Hosted CI matrix | open | Requires recorded cross-platform CI run. |
+| RFC-0002 | XYZ getter 10M-point benchmark evidence | unrecorded | — | — | Reference benchmark hardware | open | Performance artifact not recorded. |
+| RFC-0004 | 50M LAZ GPU-vs-CPU speedup | unrecorded | — | — | Reference GPU machine and LAZ fixture | open | GPU hot-path repo-local implementation is also incomplete. |
+| RFC-0005 | 10M-point kNN benchmark | unrecorded | — | — | Reference benchmark hardware | open | Octree pruning remains a repo-local gap. |
+| RFC-0006 | 10M-point SOR benchmark | unrecorded | — | — | Reference benchmark hardware | open | LAS ExtraBytes propagation remains a repo-local gap. |
+| RFC-0007 | Open3D Bunny comparison and 500k registration benchmark | unrecorded | — | — | Bundled Bunny fixture / reference CPU | open | Real point-to-plane/GICP solvers remain repo-local gaps. |
+| RFC-0009 | Standard/full benchmark CSVs | unrecorded | — | — | High-memory benchmark hardware | open | Harness exists; measured artifacts are absent. |
 
 ## 2026-05-04 Cleanup Pass
 
@@ -279,6 +305,18 @@ not upgraded based on API presence alone.
   - RFC-0002, RFC-0003, RFC-0005, RFC-0006, and RFC-0007 are marked `Partial`.
   - RFC-0008 is marked `Implemented (staged GICP follow-up open)`.
   - RFC-0009 is marked `Implemented`.
+
+## 2026-05-07 RFC-0011 Evidence-Gate Pass
+
+- Added RFC-0011 to define repo-local implementation completion separately from
+  external evidence completion.
+- Two independent subagents reviewed RFC-0011. Their required changes were
+  incorporated: mandatory `Implemented (external evidence open)` suffixes,
+  stronger benchmark artifact fields, preserved LAS-fixture requirements,
+  narrowed third-party comparison wording, and a canonical evidence register.
+- Marked RFC-0010 acceptance criteria complete based on existing docs and tests.
+- Updated RFC-0002 and RFC-0009 statuses to expose external evidence gaps
+  without claiming unrecorded benchmark or cross-platform results.
 
 ## Verification Snapshot
 

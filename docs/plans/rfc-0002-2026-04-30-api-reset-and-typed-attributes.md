@@ -1,6 +1,6 @@
 # RFC-0002: API Reset & Typed Attributes (M1)
 
-- **Status:** Partial (amended by RFC-0010)
+- **Status:** Partial (external evidence open; amended by RFC-0010/RFC-0011)
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
@@ -127,12 +127,20 @@ pc.voxel_downsample(voxel_size: float, strategy: int, *, seed: int | None = None
 
 - [x] `AttributeValue` enum implemented with exact typed host storage for the listed dtypes, per RFC-0010.
 - [x] Intensity and RGB are stored as standard attributes; the legacy `Option<Tensor1>` fields removed.
-- [ ] Typed attribute getters preserve dtype. XYZ getter performance and 10M-point benchmark evidence remain tracked as a separate optimization item.
+- [x] Typed attribute getters preserve dtype. XYZ getter performance and 10M-point benchmark evidence remain tracked as a separate optimization item.
 - [x] `PointCloud.from_xyz` accepts f32/f64/i32/i64 NumPy; `tests/test_point_cloud.py` adds `test_autocast_f64_input`, `test_autocast_int_input`, `test_reject_string_input`.
 - [x] `DownsampleStrategy` exposes `RANDOM_SEEDED`, `NEAREST_TO_CENTROID`, `AVERAGE`; the legacy middle-index bug is gone; seeded determinism is tested with two runs under the same seed yielding identical outputs.
 - [x] Repo hygiene items in §3.5 shipped; `pyproject.toml::readme` points to `README.md`, RFCs are in MkDocs nav, and the README now points to RFC-0001 for roadmap tracking.
 - [ ] `multica-home/knowledge/projects/pcl-rustic.md` written.
 - [ ] All existing tests pass; added tests above pass; `just ci` is green on Linux, macOS, Windows.
+
+### External evidence
+
+| Criterion | Artifact | Date | Git SHA | Hardware / Dataset | Status | Notes |
+|---|---|---|---|---|---|---|
+| `multica-home/knowledge/projects/pcl-rustic.md` written | unrecorded | — | — | Multica workspace | open | External workspace file is outside this repository. |
+| `just ci` is green on Linux, macOS, Windows | unrecorded | — | — | Hosted CI matrix | open | Requires recorded CI run; local checks do not prove cross-platform status. |
+| XYZ getter 10M-point benchmark evidence | unrecorded | — | — | Reference benchmark hardware | open | Separate optimization/evidence item under RFC-0010/RFC-0011. |
 
 ## 6. Risks & mitigations
 

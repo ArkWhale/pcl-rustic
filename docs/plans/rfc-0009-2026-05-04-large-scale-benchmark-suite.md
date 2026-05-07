@@ -1,6 +1,6 @@
 # RFC-0009: Large-Scale Benchmark Suite
 
-- **Status:** Implemented
+- **Status:** Implemented (external evidence open; amended by RFC-0011)
 - **Date:** 2026-05-04
 - **Author:** Codex implementation agent
 - **Related:** RFC-0003, RFC-0004, RFC-0005

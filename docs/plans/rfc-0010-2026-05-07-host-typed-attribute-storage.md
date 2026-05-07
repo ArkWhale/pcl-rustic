@@ -154,21 +154,21 @@ but this reports XYZ tensor residency, not attribute-vector residency.
 
 ## 5. Acceptance Criteria
 
-- [ ] RFC-0002 is updated to reference this amendment and mark host typed
+- [x] RFC-0002 is updated to reference this amendment and mark host typed
   attribute storage as accepted.
-- [ ] RFC-0003, RFC-0004, RFC-0006, and RFC-0007 are updated where their
+- [x] RFC-0003, RFC-0004, RFC-0006, and RFC-0007 are updated where their
   storage, mask, selection, concat, or covariance wording conflicts with this
   amendment.
-- [ ] `docs/api/pointcloud.md` explicitly states that XYZ is tensor-backed and
+- [x] `docs/api/pointcloud.md` explicitly states that XYZ is tensor-backed and
   typed attributes are host vectors.
-- [ ] `docs/memory/implementation-progress.md` removes the RFC-0002 storage
+- [x] `docs/memory/implementation-progress.md` removes the RFC-0002 storage
   scope-decision gap and keeps any remaining getter/benchmark gaps separate.
-- [ ] Focused Python dtype round-trip coverage exists for every public
+- [x] Focused Python dtype round-trip coverage exists for every public
   `AttributeValue` dtype: `float32`, `float64`, `uint8`, `uint16`, `uint32`,
   `int32`, `int64`, `bool`, and packed `float32[N, 6]`.
-- [ ] Existing LAS standard-attribute propagation, concat policy, outlier
+- [x] Existing LAS standard-attribute propagation, concat policy, outlier
   propagation, and covariance tests still pass.
-- [ ] `cargo test --lib` and the focused Python typed-attribute tests pass.
+- [x] `cargo test --lib` and the focused Python typed-attribute tests pass.
 
 ## 6. Risks And Mitigations
 
