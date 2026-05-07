@@ -19,7 +19,7 @@ rfc-{id}-{YYYY-MM-DD}-{kebab-case-title}.md
 | [RFC-0003](rfc-0003-2026-04-30-coord-ops-and-selection.md) | Coordinate Ops & Selection | Implemented | M2 |
 | [RFC-0004](rfc-0004-2026-04-30-gpu-hot-path.md) | GPU Hot-Path Rewrite | Proposed | M3 |
 | [RFC-0005](rfc-0005-2026-04-30-knn-and-normals.md) | Neighborhood Infra & Normal Estimation | Implemented (external evidence open) | M4 |
-| [RFC-0006](rfc-0006-2026-04-30-outlier-removal.md) | Outlier Removal (SOR & ROR) | Partial | M5 |
+| [RFC-0006](rfc-0006-2026-04-30-outlier-removal.md) | Outlier Removal (SOR & ROR) | Implemented (external evidence open) | M5 |
 | [RFC-0007](rfc-0007-2026-04-30-icp-gicp-registration.md) | ICP & GICP Registration | Partial | M6 |
 | [RFC-0008](rfc-0008-2026-05-04-kdtree-fallback-and-gicp-staging.md) | KD-tree Fallback & GICP Staging | Implemented (staged GICP follow-up open) | M4/M6 implementation detail |
 | [RFC-0009](rfc-0009-2026-05-04-large-scale-benchmark-suite.md) | Large-Scale Benchmark Suite | Implemented (external evidence open) | Benchmarking / RFC-0004 |

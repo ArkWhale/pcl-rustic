@@ -717,6 +717,43 @@ class TestTableIo:
             reloaded.get_attribute("gps_time")[mask],
         )
 
+    def test_las_custom_attributes_survive_outlier_round_trip(self, tmp_path):
+        xyz = np.array(
+            [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.2, 0.0, 0.0], [5.0, 5.0, 5.0]],
+            dtype=np.float32,
+        )
+        confidence = np.array([0.1, 0.2, 0.3, 9.9], dtype=np.float32)
+        source_id = np.array([10, 11, 12, 99], dtype=np.uint16)
+        flightline = np.array([100, 101, 102, 999], dtype=np.int32)
+
+        pc = PointCloud.from_xyz(xyz)
+        pc.set_attribute("confidence", confidence)
+        pc.set_attribute("source_id", source_id)
+        pc.set_attribute("flightline", flightline)
+
+        first_path = tmp_path / "custom_attrs.las"
+        pc.to_las(str(first_path))
+        reloaded = PointCloud.from_las(str(first_path))
+
+        np.testing.assert_array_equal(reloaded.get_attribute("confidence"), confidence)
+        np.testing.assert_array_equal(reloaded.get_attribute("source_id"), source_id)
+        np.testing.assert_array_equal(reloaded.get_attribute("flightline"), flightline)
+
+        filtered, mask = reloaded.remove_radius_outlier(nb_points=1, radius=0.15)
+        second_path = tmp_path / "custom_attrs_filtered.las"
+        filtered.to_las(str(second_path))
+        filtered_reloaded = PointCloud.from_las(str(second_path))
+
+        np.testing.assert_array_equal(
+            filtered_reloaded.get_attribute("confidence"), confidence[mask]
+        )
+        np.testing.assert_array_equal(
+            filtered_reloaded.get_attribute("source_id"), source_id[mask]
+        )
+        np.testing.assert_array_equal(
+            filtered_reloaded.get_attribute("flightline"), flightline[mask]
+        )
+
     def test_csv_and_parquet_round_trip(self, tmp_path):
         xyz = np.array(
             [[0.0, 1.0, 2.0], [3.0, 4.0, 5.0], [6.0, 7.0, 8.0]],

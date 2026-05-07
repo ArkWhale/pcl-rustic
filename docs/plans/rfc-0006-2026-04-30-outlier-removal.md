@@ -1,6 +1,6 @@
 # RFC-0006: Outlier Removal — SOR & ROR (M5)
 
-- **Status:** Partial (amended by RFC-0010)
+- **Status:** Implemented (external evidence open; amended by RFC-0010/RFC-0011)
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
@@ -90,7 +90,13 @@ Open3D ships no defaults (all args required). We match that — no silent defaul
   - Empty input → error, not panic.
   - `kept_mask.sum() == pc_clean.point_count()`.
 - [ ] Benchmark: SOR on a 10M-point cloud with `nb_neighbors=20` completes in < 30 s on the reference machine (dominated by kNN queries).
-- [ ] Attribute propagation: intensity, RGB, classification, custom attributes all survive correctly (tested via a LAS round-trip + outlier step + comparison). Synthetic typed-attribute propagation coverage exists, and LAS round-trip coverage now covers standard LAS attributes; custom attributes via LAS ExtraBytes remain open.
+- [x] Attribute propagation: intensity, RGB, classification, custom attributes all survive correctly (tested via a LAS round-trip + outlier step + comparison).
+
+### External evidence
+
+| Criterion | Artifact | Date | Git SHA | Hardware / Dataset | Status | Notes |
+|---|---|---|---|---|---|---|
+| SOR on a 10M-point cloud with `nb_neighbors=20` completes in < 30 s | unrecorded | — | — | Reference benchmark hardware | open | Requires recorded high-scale benchmark artifact per RFC-0011. |
 - [x] Documentation page `docs/api/outlier.md` ships with worked examples and parameter-tuning guidance (what `std_ratio=2.0` vs `3.0` does).
 - [x] Both functions included in the classification-aware pipeline example from RFC-0003 as an optional cleaning step.
 

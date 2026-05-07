@@ -2,8 +2,29 @@ use crate::point_cloud::attribute_value::AttributeValue;
 use crate::point_cloud::core::HighPerformancePointCloud;
 use crate::utils::error::{PointCloudError, Result};
 use las::point::Format;
-use las::{Builder, Color, Point, Reader, Writer};
+use las::{Builder, Color, Point, Reader, Vlr, Writer};
 use std::fs;
+
+const EXTRA_BYTES_USER_ID: &str = "pcl-rustic";
+const EXTRA_BYTES_RECORD_ID: u16 = 1;
+const STANDARD_LAS_ATTRIBUTES: &[&str] = &[
+    "intensity",
+    "classification",
+    "return_number",
+    "number_of_returns",
+    "gps_time",
+    "red",
+    "green",
+    "blue",
+];
+
+#[derive(Clone, Debug)]
+struct ExtraByteField {
+    name: String,
+    dtype: String,
+    offset: usize,
+    size: usize,
+}
 
 impl HighPerformancePointCloud {
     pub fn from_las_laz(path: &str) -> Result<Self> {
@@ -22,6 +43,8 @@ impl HighPerformancePointCloud {
 
         let has_color = reader.header().point_format().has_color;
         let has_gps_time = reader.header().point_format().has_gps_time;
+        let extra_fields = extra_byte_fields(reader.header().vlrs())?;
+        let mut extra_columns: Vec<Vec<u8>> = extra_fields.iter().map(|_| Vec::new()).collect();
 
         for point_result in reader.points() {
             let point = point_result.map_err(|_| "failed to read LAS point".to_string())?;
@@ -45,6 +68,14 @@ impl HighPerformancePointCloud {
                     rgb_r_vec.push(0);
                     rgb_g_vec.push(0);
                     rgb_b_vec.push(0);
+                }
+            }
+
+            for (field_idx, field) in extra_fields.iter().enumerate() {
+                let end = field.offset + field.size;
+                if point.extra_bytes.len() >= end {
+                    extra_columns[field_idx]
+                        .extend_from_slice(&point.extra_bytes[field.offset..end]);
                 }
             }
         }
@@ -98,6 +129,11 @@ impl HighPerformancePointCloud {
                 .attributes_mut()
                 .insert("blue".to_string(), AttributeValue::U8(rgb_b_vec));
         }
+        for (field, bytes) in extra_fields.iter().zip(extra_columns.iter()) {
+            if let Some(attr) = decode_extra_attribute(&field.dtype, bytes, n)? {
+                result.attributes_mut().insert(field.name.clone(), attr);
+            }
+        }
 
         Ok(result)
     }
@@ -122,10 +158,16 @@ impl HighPerformancePointCloud {
             (false, false) => 0,
         };
 
+        let extra_fields = collect_extra_byte_fields(self.attributes())?;
+
         let mut builder = Builder::from((1, 4));
         let mut format = Format::new(format_id).map_err(|e| e.to_string())?;
         format.is_compressed = compress || path.to_lowercase().ends_with(".laz");
+        format.extra_bytes = extra_fields.iter().map(|field| field.size as u16).sum();
         builder.point_format = format;
+        if !extra_fields.is_empty() {
+            builder.vlrs.push(extra_bytes_vlr(&extra_fields));
+        }
         let header = builder.into_header().map_err(|e| e.to_string())?;
 
         let mut writer = Writer::from_path(path, header).map_err(|e| e.to_string())?;
@@ -191,6 +233,10 @@ impl HighPerformancePointCloud {
                 }
             }
 
+            if !extra_fields.is_empty() {
+                point.extra_bytes = encode_extra_bytes(self.attributes(), &extra_fields, idx)?;
+            }
+
             writer.write_point(point).map_err(|e| e.to_string())?;
         }
 
@@ -204,5 +250,189 @@ impl HighPerformancePointCloud {
         }
         fs::remove_file(path).map_err(PointCloudError::IoError)?;
         Ok(())
+    }
+}
+
+fn collect_extra_byte_fields(
+    attributes: &std::collections::HashMap<String, AttributeValue>,
+) -> Result<Vec<ExtraByteField>> {
+    let mut fields = Vec::new();
+    let mut offset = 0usize;
+    let mut names: Vec<&String> = attributes.keys().collect();
+    names.sort();
+    for name in names {
+        if STANDARD_LAS_ATTRIBUTES.contains(&name.as_str()) {
+            continue;
+        }
+        let attr = &attributes[name];
+        let dtype = match attr {
+            AttributeValue::F32(_) => "float32",
+            AttributeValue::F64(_) => "float64",
+            AttributeValue::U8(_) => "uint8",
+            AttributeValue::U16(_) => "uint16",
+            AttributeValue::U32(_) => "uint32",
+            AttributeValue::I32(_) => "int32",
+            AttributeValue::I64(_) => "int64",
+            AttributeValue::Bool(_) => "bool",
+            AttributeValue::F32x6(_) => continue,
+        };
+        let size = attr.bytes_per_element();
+        fields.push(ExtraByteField {
+            name: name.clone(),
+            dtype: dtype.to_string(),
+            offset,
+            size,
+        });
+        offset += size;
+    }
+    if offset > u16::MAX as usize {
+        return Err(PointCloudError::InvalidParameter(
+            "LAS ExtraBytes payload exceeds u16::MAX bytes per point".to_string(),
+        ));
+    }
+    Ok(fields)
+}
+
+fn extra_bytes_vlr(fields: &[ExtraByteField]) -> Vlr {
+    let lines = fields
+        .iter()
+        .map(|field| format!("{},{},{}", field.name, field.dtype, field.size))
+        .collect::<Vec<_>>()
+        .join("\n");
+    Vlr {
+        user_id: EXTRA_BYTES_USER_ID.to_string(),
+        record_id: EXTRA_BYTES_RECORD_ID,
+        description: "pcl-rustic ExtraBytes schema".to_string(),
+        data: lines.into_bytes(),
+    }
+}
+
+fn extra_byte_fields(vlrs: &[Vlr]) -> Result<Vec<ExtraByteField>> {
+    let Some(vlr) = vlrs
+        .iter()
+        .find(|vlr| vlr.user_id == EXTRA_BYTES_USER_ID && vlr.record_id == EXTRA_BYTES_RECORD_ID)
+    else {
+        return Ok(Vec::new());
+    };
+    let schema = std::str::from_utf8(&vlr.data).map_err(|e| {
+        PointCloudError::InvalidParameter(format!("invalid ExtraBytes schema: {e}"))
+    })?;
+    let mut fields = Vec::new();
+    let mut offset = 0usize;
+    for line in schema.lines().filter(|line| !line.trim().is_empty()) {
+        let mut parts = line.split(',');
+        let name = parts.next().unwrap_or_default();
+        let dtype = parts.next().unwrap_or_default();
+        let recorded_size = parts.next().unwrap_or_default();
+        let size = extra_dtype_size(dtype).ok_or_else(|| {
+            PointCloudError::InvalidParameter(format!("unsupported ExtraBytes dtype '{dtype}'"))
+        })?;
+        if parts.next().is_some() || name.is_empty() || recorded_size.parse::<usize>() != Ok(size) {
+            return Err(PointCloudError::InvalidParameter(format!(
+                "invalid ExtraBytes schema line '{line}'"
+            )));
+        }
+        fields.push(ExtraByteField {
+            name: name.to_string(),
+            dtype: dtype.to_string(),
+            offset,
+            size,
+        });
+        offset += size;
+    }
+    Ok(fields)
+}
+
+fn extra_dtype_size(dtype: &str) -> Option<usize> {
+    match dtype {
+        "float32" | "uint32" | "int32" => Some(4),
+        "float64" | "int64" => Some(8),
+        "uint8" | "bool" => Some(1),
+        "uint16" => Some(2),
+        _ => None,
+    }
+}
+
+fn encode_extra_bytes(
+    attributes: &std::collections::HashMap<String, AttributeValue>,
+    fields: &[ExtraByteField],
+    idx: usize,
+) -> Result<Vec<u8>> {
+    let mut out = Vec::with_capacity(fields.iter().map(|field| field.size).sum());
+    for field in fields {
+        let attr = attributes.get(&field.name).ok_or_else(|| {
+            PointCloudError::InvalidParameter(format!(
+                "missing ExtraBytes attribute '{}'",
+                field.name
+            ))
+        })?;
+        match (field.dtype.as_str(), attr) {
+            ("float32", AttributeValue::F32(v)) => out.extend_from_slice(&v[idx].to_le_bytes()),
+            ("float64", AttributeValue::F64(v)) => out.extend_from_slice(&v[idx].to_le_bytes()),
+            ("uint8", AttributeValue::U8(v)) => out.push(v[idx]),
+            ("uint16", AttributeValue::U16(v)) => out.extend_from_slice(&v[idx].to_le_bytes()),
+            ("uint32", AttributeValue::U32(v)) => out.extend_from_slice(&v[idx].to_le_bytes()),
+            ("int32", AttributeValue::I32(v)) => out.extend_from_slice(&v[idx].to_le_bytes()),
+            ("int64", AttributeValue::I64(v)) => out.extend_from_slice(&v[idx].to_le_bytes()),
+            ("bool", AttributeValue::Bool(v)) => out.push(u8::from(v[idx])),
+            _ => {
+                return Err(PointCloudError::InvalidParameter(format!(
+                    "ExtraBytes dtype mismatch for '{}'",
+                    field.name
+                )))
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn decode_extra_attribute(dtype: &str, bytes: &[u8], len: usize) -> Result<Option<AttributeValue>> {
+    if len == 0 {
+        return Ok(None);
+    }
+    match dtype {
+        "float32" => Ok(Some(AttributeValue::F32(
+            bytes
+                .chunks_exact(4)
+                .map(|chunk| f32::from_le_bytes(chunk.try_into().unwrap()))
+                .collect(),
+        ))),
+        "float64" => Ok(Some(AttributeValue::F64(
+            bytes
+                .chunks_exact(8)
+                .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+                .collect(),
+        ))),
+        "uint8" => Ok(Some(AttributeValue::U8(bytes.to_vec()))),
+        "uint16" => Ok(Some(AttributeValue::U16(
+            bytes
+                .chunks_exact(2)
+                .map(|chunk| u16::from_le_bytes(chunk.try_into().unwrap()))
+                .collect(),
+        ))),
+        "uint32" => Ok(Some(AttributeValue::U32(
+            bytes
+                .chunks_exact(4)
+                .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
+                .collect(),
+        ))),
+        "int32" => Ok(Some(AttributeValue::I32(
+            bytes
+                .chunks_exact(4)
+                .map(|chunk| i32::from_le_bytes(chunk.try_into().unwrap()))
+                .collect(),
+        ))),
+        "int64" => Ok(Some(AttributeValue::I64(
+            bytes
+                .chunks_exact(8)
+                .map(|chunk| i64::from_le_bytes(chunk.try_into().unwrap()))
+                .collect(),
+        ))),
+        "bool" => Ok(Some(AttributeValue::Bool(
+            bytes.iter().map(|value| *value != 0).collect(),
+        ))),
+        _ => Err(PointCloudError::InvalidParameter(format!(
+            "unsupported ExtraBytes dtype '{dtype}'"
+        ))),
     }
 }
