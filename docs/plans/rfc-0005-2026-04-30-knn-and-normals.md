@@ -1,6 +1,6 @@
 # RFC-0005: Neighborhood Infra — KD-tree, Octree & Normal Estimation (M4)
 
-- **Status:** Partial
+- **Status:** Implemented (external evidence open; amended by RFC-0011)
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
@@ -149,12 +149,18 @@ Neither is committed for M4. If adopted, keep the CPU `kiddo` path as the correc
 ## 4. Acceptance criteria
 
 - [x] `KdTree::build` / `knn` / `radius_search` implemented and tested against a brute-force oracle on 10k-point random clouds (exact match for kNN, setwise match for radius).
-- [ ] `PointCloud.kdtree()` cache works: tested that repeated `knn` calls on an unchanged cloud do not rebuild; tested that any mutating op invalidates.
+- [x] `PointCloud.kdtree()` cache works: tested that repeated `knn` calls on an unchanged cloud do not rebuild; tested that any mutating op invalidates.
 - [x] `PointCloud.kdtree()` returns `Err` (not panic) on empty or invalid input; tested.
-- [ ] `Octree::build` / `range_search` implemented and tested against the same brute-force oracle; `PointCloud.octree(max_depth)` returns `Err` on empty input. Correctness and empty-input coverage exist; `range_search` still brute-forces over all XYZ rather than pruning via octree cells.
+- [x] `Octree::build` / `range_search` implemented and tested against the same brute-force oracle; `PointCloud.octree(max_depth)` returns `Err` on empty input; `range_search` prunes candidate points via octree cells before exact radius filtering.
 - [x] `estimate_normals(Knn | Radius | Hybrid)` ships; normals are unit-length within 1e-5; smoke test against a synthetic plane produces normals aligned to ±plane-normal for ≥ 99% of points.
-- [ ] Python API exposed per §3.4; `.pyi` stubs updated.
+- [x] Python API exposed per §3.4; `.pyi` stubs updated.
 - [ ] Benchmark: 10M-point kNN(k=16) on the reference machine completes in < 10 s build + < 2 s query; documented in `docs/performance/benchmarks.md`.
+
+### External evidence
+
+| Criterion | Artifact | Date | Git SHA | Hardware / Dataset | Status | Notes |
+|---|---|---|---|---|---|---|
+| 10M-point kNN(k=16) benchmark completes in < 10 s build + < 2 s query | unrecorded | — | — | Reference benchmark hardware | open | Requires recorded high-scale benchmark artifact per RFC-0011. |
 
 ## 5. Risks & mitigations
 

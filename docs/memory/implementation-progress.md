@@ -18,7 +18,7 @@ recorded artifact exists.
 | RFC-0002 API Reset & Typed Attributes | Partial (external evidence open), amended by RFC-0010/RFC-0011 | Typed attributes, host typed storage, dtype-preserving typed getters, and new downsample strategies exist; external Multica docs, cross-platform CI evidence, and XYZ getter benchmark evidence remain open. |
 | RFC-0003 Coordinate Ops & Selection | Partial | Selection, generic attribute filters, AABB/OBB crop, concat, transform wrappers, examples, and LAS standard-attribute round-trip coverage exist; fixture-backed examples and device-native selection are still missing. |
 | RFC-0004 GPU Hot Path | Mostly missing | Device transfer hooks exist, but voxel downsample, selection, concat, and benchmarks remain CPU/reference paths. |
-| RFC-0005 KD-tree, Octree, Normals | Partial | KD-tree, fallback, octree, Python APIs, normals, covariance support, 10k brute-force oracle tests, 10k plane-normal coverage, and KD-tree cache behavior tests exist; pruning, parallel normals, and benchmarks are still missing. |
+| RFC-0005 KD-tree, Octree, Normals | Implemented (external evidence open) | KD-tree, fallback, octree cell-pruned range search, Python APIs, normals, covariance support, 10k brute-force oracle tests, 10k plane-normal coverage, and KD-tree cache behavior tests exist; 10M benchmark evidence remains open. |
 | RFC-0006 Outlier Removal | Partial, amended by RFC-0010 | SOR/ROR APIs, host masks, docs, synthetic acceptance tests, typed attribute propagation, and LAS standard-attribute propagation coverage exist; custom LAS ExtraBytes propagation and 10M benchmark are missing. |
 | RFC-0007 ICP/GICP Registration | Partial | Registration API, point-to-point ICP, evaluate, covariance storage, and prerequisite validation exist; point-to-plane/GICP solvers are staged, not complete. |
 | RFC-0008 KD-tree Fallback & GICP Staging | Mostly implemented | Fallback behavior and staged GICP decision are implemented; full covariance-weighted GICP remains open by design. |
@@ -231,10 +231,7 @@ implementation.
 
 ### RFC-0005
 
-- Code gap: octree `range_search` brute-forces over all XYZ rather than pruning
-  via octree cells, though correctness is covered by a 10k brute-force oracle.
-- Code gap: normal estimation is not parallelized with `rayon`.
-- Benchmark gap: no 10M-point kNN result is recorded in
+- External evidence gap: no 10M-point kNN result is recorded in
   `docs/performance/benchmarks.md`.
 
 ### RFC-0006
@@ -281,7 +278,7 @@ implementation.
 | RFC-0002 | `just ci` green on Linux, macOS, Windows | unrecorded | — | — | Hosted CI matrix | open | Requires recorded cross-platform CI run. |
 | RFC-0002 | XYZ getter 10M-point benchmark evidence | unrecorded | — | — | Reference benchmark hardware | open | Performance artifact not recorded. |
 | RFC-0004 | 50M LAZ GPU-vs-CPU speedup | unrecorded | — | — | Reference GPU machine and LAZ fixture | open | GPU hot-path repo-local implementation is also incomplete. |
-| RFC-0005 | 10M-point kNN benchmark | unrecorded | — | — | Reference benchmark hardware | open | Octree pruning remains a repo-local gap. |
+| RFC-0005 | 10M-point kNN benchmark | unrecorded | — | — | Reference benchmark hardware | open | Repo-local neighbor API, KD-tree cache, octree pruning, and normal-estimation criteria are implemented. |
 | RFC-0006 | 10M-point SOR benchmark | unrecorded | — | — | Reference benchmark hardware | open | LAS ExtraBytes propagation remains a repo-local gap. |
 | RFC-0007 | Open3D Bunny comparison and 500k registration benchmark | unrecorded | — | — | Bundled Bunny fixture / reference CPU | open | Real point-to-plane/GICP solvers remain repo-local gaps. |
 | RFC-0009 | Standard/full benchmark CSVs | unrecorded | — | — | High-memory benchmark hardware | open | Harness exists; measured artifacts are absent. |

@@ -51,12 +51,46 @@ impl Octree {
         }
         let r2 = radius * radius;
         Ok(self
-            .xyz
-            .iter()
-            .enumerate()
-            .filter(|(_, p)| squared_distance(p, center) <= r2)
-            .map(|(idx, _)| idx as u64)
+            .candidate_indices_for_range(center, radius)
+            .into_iter()
+            .filter(|&idx| squared_distance(&self.xyz[idx as usize], center) <= r2)
             .collect())
+    }
+
+    fn candidate_indices_for_range(&self, center: &[f32; 3], radius: f32) -> Vec<u64> {
+        let (min_cell, max_cell) = self.cell_bounds_for_range(center, radius);
+        let mut out = Vec::new();
+        for x in min_cell[0]..=max_cell[0] {
+            for y in min_cell[1]..=max_cell[1] {
+                for z in min_cell[2]..=max_cell[2] {
+                    if let Some(indices) = self.cells.get(&[x, y, z]) {
+                        out.extend(indices.iter().copied());
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    fn cell_bounds_for_range(&self, center: &[f32; 3], radius: f32) -> ([u32; 3], [u32; 3]) {
+        let resolution = 1u32 << self.max_depth;
+        let mut min_cell = [0; 3];
+        let mut max_cell = [0; 3];
+        for axis in 0..3 {
+            min_cell[axis] = coordinate_to_cell(
+                center[axis] - radius,
+                self.min[axis],
+                self.max[axis],
+                resolution,
+            );
+            max_cell[axis] = coordinate_to_cell(
+                center[axis] + radius,
+                self.min[axis],
+                self.max[axis],
+                resolution,
+            );
+        }
+        (min_cell, max_cell)
     }
 
     pub fn voxel_centers(&self) -> Vec<[f32; 3]> {
@@ -85,11 +119,15 @@ fn cell_for_point(point: &[f32; 3], min: [f32; 3], max: [f32; 3], max_depth: u8)
     let resolution = 1u32 << max_depth;
     let mut cell = [0; 3];
     for axis in 0..3 {
-        let width = (max[axis] - min[axis]).max(f32::EPSILON);
-        let normalized = ((point[axis] - min[axis]) / width).clamp(0.0, 1.0);
-        cell[axis] = (normalized * (resolution - 1) as f32).floor() as u32;
+        cell[axis] = coordinate_to_cell(point[axis], min[axis], max[axis], resolution);
     }
     cell
+}
+
+fn coordinate_to_cell(value: f32, min: f32, max: f32, resolution: u32) -> u32 {
+    let width = (max - min).max(f32::EPSILON);
+    let normalized = ((value - min) / width).clamp(0.0, 1.0);
+    (normalized * (resolution - 1) as f32).floor() as u32
 }
 
 fn squared_distance(a: &[f32; 3], b: &[f32; 3]) -> f32 {
@@ -152,6 +190,32 @@ mod tests {
             expected.sort_unstable();
             assert_eq!(actual, expected);
         }
+    }
+
+    #[test]
+    fn range_search_prunes_candidates_by_octree_cell() {
+        let mut xyz = Vec::new();
+        for x in 0..100 {
+            for y in 0..100 {
+                xyz.push([x as f32, y as f32, 0.0]);
+            }
+        }
+        let pc = HighPerformancePointCloud::from_xyz_vec(xyz.clone()).unwrap();
+        let octree = pc.octree(6).unwrap();
+
+        let candidates = octree.candidate_indices_for_range(&[50.0, 50.0, 0.0], 2.0);
+
+        assert!(candidates.len() < xyz.len() / 10);
+        let mut actual = octree.range_search(&[50.0, 50.0, 0.0], 2.0).unwrap();
+        let mut expected: Vec<u64> = xyz
+            .iter()
+            .enumerate()
+            .filter(|(_, point)| squared_distance(point, &[50.0, 50.0, 0.0]) <= 4.0)
+            .map(|(idx, _)| idx as u64)
+            .collect();
+        actual.sort_unstable();
+        expected.sort_unstable();
+        assert_eq!(actual, expected);
     }
 
     #[test]
