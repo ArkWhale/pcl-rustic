@@ -107,8 +107,14 @@ nav:
     - RFC-0008: plans/rfc-0008-2026-05-04-kdtree-fallback-and-gicp-staging.md
     - RFC-0009: plans/rfc-0009-2026-05-04-large-scale-benchmark-suite.md
     - RFC-0010: plans/rfc-0010-2026-05-07-host-typed-attribute-storage.md
+    - RFC-0011: plans/rfc-0011-2026-05-07-completion-evidence-gates.md
+    - RFC-0012: plans/rfc-0012-2026-05-07-rfc0004-device-residency-scope.md
+    - RFC-0013: plans/rfc-0013-2026-05-07-las-point-format-10.md
+    - RFC-0014: plans/rfc-0014-2026-05-08-las-point-format-10-api-policy.md
+    - RFC-0015: plans/rfc-0015-2026-05-08-open3d-comparison-charts.md
   - 性能:
     - 基准测试: performance/benchmarks.md
+    - Open3D 对比: performance/open3d-comparison.md
     - 优化建议: performance/optimization.md
   - 开发:
     - 环境设置: development/setup.md

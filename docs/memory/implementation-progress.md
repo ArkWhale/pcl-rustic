@@ -22,9 +22,10 @@ point format 10 export API and waveform metadata drop/reject policy. Commits
 clean after those commits. A 2026-05-08 RFC-0002 through RFC-0012 loop found no
 remaining repo-local implementation gaps, removed redundant internal helpers in
 commit `5cb3284`, and left only the RFC-0011 external evidence gates open.
-RFC-0015 was drafted on 2026-05-08 to add pytest-benchmark based Open3D
-comparison benchmarks and Plotly chart rendering from recorded benchmark
-artifacts.
+RFC-0015 was drafted and implemented on 2026-05-08 to add pytest-benchmark
+based Open3D comparison benchmarks and Plotly chart rendering from recorded
+benchmark artifacts. Measured Open3D comparison results remain external
+evidence until generated and recorded under RFC-0011 rules.
 
 | RFC | Status | Summary |
 |---|---|---|
@@ -41,7 +42,7 @@ artifacts.
 | RFC-0012 RFC-0004 Device Residency Scope | Accepted | RFC-0004 repo-local completion now requires source/common-device XYZ results for selection, concat, voxel downsample, and transforms, while measured GPU speedup remains external evidence. |
 | RFC-0013 LAS Point Format 10 Precision Support | Implemented | LAS 1.4 point format 10 read/write, optional standard attributes, uint16 RGB/NIR, waveform metadata default/reject/drop behavior, raw coordinate precision sidecars, standard ExtraBytes collision handling, and uint64/int16 typed storage are implemented and tested. |
 | RFC-0014 LAS Point Format 10 Export API And Payload Policy | Implemented | Python/Rust-compatible `to_las` policy, `point_format=10`, `las_version`, `drop_waveform`, partial RGB defaults, version validation, unsupported format errors, and waveform metadata policy are implemented and tested. |
-| RFC-0015 Open3D Comparison Benchmark Charts | Draft | Proposes pytest-benchmark based pcl-rustic/Open3D comparison benchmarks across point-count scales, with Plotly charts generated from recorded benchmark JSON artifacts. |
+| RFC-0015 Open3D Comparison Benchmark Charts | Implemented (external evidence open) | pytest-benchmark based pcl-rustic/Open3D comparison harness, optional benchmark dependency group, just recipes, parser tests, and Plotly chart renderer exist; measured comparison artifacts remain unrecorded. |
 
 ## Implemented Evidence
 
@@ -249,6 +250,31 @@ artifacts.
   ExtraBytes collision behavior, Python dtype propagation, version/format
   validation, partial RGB defaults, and waveform policy.
 
+### RFC-0015 - Open3D Comparison Benchmark Charts
+
+- `pyproject.toml` defines a benchmark-only dependency group for `open3d`,
+  `plotly`, and `pytest-benchmark`; these are not runtime dependencies.
+- `tests/test_open3d_benchmark.py` implements the RFC-0015 comparison harness
+  using pytest-benchmark when installed, with collection-safe skips otherwise.
+- The harness covers construction, transform, voxel downsample, warm kNN, warm
+  radius search, normal estimation, SOR/ROR, and point-to-point/point-to-plane
+  ICP across smoke/standard/full point-count modes.
+- Benchmark metadata records library, operation, case, point count, output
+  count, dependency versions, platform, git SHA, and operation parameters.
+- Timed callables separate setup/mutation/cache policy where needed, including
+  fresh Open3D clouds for mutating operations and explicit warm-index neighbor
+  cases.
+- `tools/render_open3d_benchmark_charts.py` reads pytest-benchmark JSON,
+  writes `open3d-comparison-summary.csv`, and renders interactive Plotly HTML
+  without running benchmarks.
+- Tests cover parser behavior, summary speedup rows, non-comparable exclusions,
+  `extra_info` metadata parsing, mode matrices, operation coverage, and
+  metadata contract.
+- Added `just benchmark-compare-smoke`, `benchmark-compare-standard`,
+  `benchmark-compare-full`, and `benchmark-compare-charts`.
+- `docs/performance/open3d-comparison.md` documents commands, modes, outputs,
+  optional dependency isolation, and RFC-0011 evidence rules.
+
 ## Important Gaps By RFC
 
 This section is the current implementation backlog. Per RFC-0011, repo-local
@@ -329,8 +355,10 @@ implementation.
 
 ### RFC-0015
 
-- Draft RFC only. No implementation exists yet for pytest-benchmark based
-  Open3D comparison benchmarks or Plotly chart rendering.
+- No repo-local implementation gap remains. The comparison harness and chart
+  renderer exist.
+- External evidence gap: no recorded Open3D comparison benchmark JSON, summary
+  CSV, or Plotly HTML artifact has been generated on benchmark hardware.
 
 ## External Evidence Register
 
@@ -344,6 +372,7 @@ implementation.
 | RFC-0006 | 10M-point SOR benchmark | unrecorded | — | — | Reference benchmark hardware | open | Repo-local SOR/ROR behavior and LAS standard/custom attribute propagation are implemented. |
 | RFC-0007 | Open3D Bunny comparison and 500k registration benchmark | unrecorded | — | — | Bundled Bunny fixture / reference CPU | open | Repo-local point-to-point, point-to-plane, and GICP solvers are implemented. |
 | RFC-0009 | Standard/full benchmark CSVs | unrecorded | — | — | High-memory benchmark hardware | open | Harness exists; measured artifacts are absent. |
+| RFC-0015 | Open3D comparison benchmark JSON/CSV/HTML artifacts | unrecorded | — | — | Benchmark machine with Open3D and pytest-benchmark | open | Repo-local harness and Plotly renderer exist; measured comparison artifacts are absent. |
 
 ## 2026-05-08 RFC-0002 Through RFC-0012 Loop
 

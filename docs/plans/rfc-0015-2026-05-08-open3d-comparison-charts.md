@@ -1,6 +1,6 @@
 # RFC-0015: Open3D Comparison Benchmark Charts
 
-- **Status:** Draft
+- **Status:** Implemented (external evidence open)
 - **Date:** 2026-05-08
 - **Author:** Codex
 - **Related:** RFC-0001, RFC-0005, RFC-0006, RFC-0007, RFC-0009, RFC-0011
@@ -224,36 +224,36 @@ block on the full matrix:
 
 ## 4. Acceptance Criteria
 
-- [ ] `pyproject.toml` defines benchmark-only dependencies for
+- [x] `pyproject.toml` defines benchmark-only dependencies for
       `pytest-benchmark`, `open3d`, and `plotly` without adding them to runtime
       dependencies.
-- [ ] `tests/test_open3d_benchmark.py` uses pytest-benchmark for timing and
+- [x] `tests/test_open3d_benchmark.py` uses pytest-benchmark for timing and
       supports `smoke`, `standard`, and `full` modes.
-- [ ] Benchmark tests define operation-specific equivalence checks and exclude
+- [x] Benchmark tests define operation-specific equivalence checks and exclude
       non-equivalent pairs from speedup-ratio charts.
-- [ ] Timed callables isolate setup, mutation, and cold/warm cache behavior so
+- [x] Timed callables isolate setup, mutation, and cold/warm cache behavior so
       pcl-rustic and Open3D measure comparable work.
-- [ ] Benchmark tests are collection-safe when optional Open3D, Plotly, or
+- [x] Benchmark tests are collection-safe when optional Open3D, Plotly, or
       pytest-benchmark dependencies are not installed.
-- [ ] Every comparable operation in §3.1 has both a pcl-rustic benchmark and an
+- [x] Every comparable operation in §3.1 has both a pcl-rustic benchmark and an
       Open3D benchmark, or a documented `not_comparable` exclusion with a
       technical reason.
-- [ ] The suite writes pytest-benchmark JSON artifacts under
+- [x] The suite writes pytest-benchmark JSON artifacts under
       `reports/benchmarks/`.
-- [ ] Plotly chart generation reads pytest-benchmark JSON artifacts and writes
+- [x] Plotly chart generation reads pytest-benchmark JSON artifacts and writes
       an interactive HTML report without rerunning benchmarks.
-- [ ] Charts include runtime scaling and pcl-rustic/Open3D ratio views for every
+- [x] Charts include runtime scaling and pcl-rustic/Open3D ratio views for every
       comparable operation.
-- [ ] The report includes dependency versions, hardware metadata, command line,
+- [x] The report includes dependency versions, hardware metadata, command line,
       benchmark mode, and git SHA.
-- [ ] `just benchmark-compare-smoke`,
+- [x] `just benchmark-compare-smoke`,
       `just benchmark-compare-standard`, `just benchmark-compare-full`, and
       `just benchmark-compare-charts` exist.
-- [ ] Smoke comparison benchmarks and chart generation are safe for ordinary CI
+- [x] Smoke comparison benchmarks and chart generation are safe for ordinary CI
       when optional benchmark dependencies are installed.
-- [ ] Documentation explains how to run the comparison suite and how to
+- [x] Documentation explains how to run the comparison suite and how to
       interpret charts without making unrecorded performance claims.
-- [ ] Published comparison evidence is linked from `docs/performance/` and the
+- [x] Published comparison evidence is linked from `docs/performance/` and the
       RFC-0011 external evidence register, or explicitly remains local-only.
 
 ## 5. Risks And Mitigations
