@@ -1,6 +1,6 @@
 # RFC-0008: KD-tree Fallback & GICP Staging
 
-- **Status:** Implemented (staged GICP follow-up open)
+- **Status:** Implemented
 - **Date:** 2026-05-04
 - **Author:** Codex implementation agent
 - **Related:** RFC-0005, RFC-0007
@@ -13,10 +13,9 @@ bucket. This RFC records the implementation decision: build a `kiddo` index when
 the input is suitable, and fall back to deterministic brute-force queries when
 the geometry would exceed `kiddo` bucket limits.
 
-RFC-0007 requires GICP API support and covariance storage. This implementation
-ships covariance estimation and validates GICP prerequisites, while staging the
-GICP iterative update on the same stable point-to-point solve used by the core
-ICP loop.
+RFC-0007 requires GICP API support and covariance storage. The current
+implementation ships covariance estimation, validates GICP prerequisites, and
+uses a covariance-weighted iterative update in the core ICP loop.
 
 ## 2. Motivation
 
@@ -25,9 +24,10 @@ workflows. A neighbor API that panics on those inputs violates RFC-0005's
 acceptance criteria that empty or invalid inputs return clean errors and that
 normal estimation works on synthetic planes.
 
-GICP has a larger numerical surface area than point-to-point ICP. Staging its
-full plane-to-plane solve behind an API-compatible covariance path keeps the
-public API aligned with RFC-0007 while preserving a tested registration loop.
+GICP has a larger numerical surface area than point-to-point ICP. Keeping
+explicit covariance prerequisites and focused tests around the covariance-
+weighted update preserves a stable API while avoiding silent fallback to a
+different estimator.
 
 ## 3. Decision
 
@@ -45,7 +45,7 @@ public API aligned with RFC-0007 while preserving a tested registration loop.
 - [x] Plane normal estimation no longer panics on degenerate axis-aligned data.
 - [x] `knn` and `radius_search` remain deterministic under fallback.
 - [x] GICP prerequisite errors are clear when covariance attributes are missing.
-- [x] A follow-up implementation replaces the staged GICP update with a
+- [x] A follow-up implementation replaces the initial GICP update with a
       covariance-weighted solve. External comparison evidence is tracked under
       RFC-0007/RFC-0011.
 

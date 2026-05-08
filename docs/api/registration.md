@@ -59,8 +59,8 @@ result = registration.icp(
 )
 ```
 
-The current GICP path validates and carries covariance data; the iterative update
-uses the stable point-to-point solve as the baseline estimator.
+The GICP path validates covariance data and uses a covariance-weighted small
+angle update with `epsilon` regularization.
 
 ## Evaluation
 
@@ -75,4 +75,3 @@ score = registration.evaluate(
 
 `RegistrationResult.correspondence_set` contains `(source_index, target_index)`
 pairs.
-

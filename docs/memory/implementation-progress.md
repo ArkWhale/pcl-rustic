@@ -31,7 +31,7 @@ commit `5cb3284`, and left only the RFC-0011 external evidence gates open.
 | RFC-0005 KD-tree, Octree, Normals | Implemented (external evidence open) | KD-tree, fallback, octree cell-pruned range search, Python APIs, normals, covariance support, 10k brute-force oracle tests, 10k plane-normal coverage, and KD-tree cache behavior tests exist; 10M benchmark evidence remains open. |
 | RFC-0006 Outlier Removal | Implemented (external evidence open), amended by RFC-0010/RFC-0011 | SOR/ROR APIs, host masks, docs, synthetic acceptance tests, typed attribute propagation, LAS standard-attribute propagation, and custom ExtraBytes propagation coverage exist; 10M benchmark evidence remains open. |
 | RFC-0007 ICP/GICP Registration | Implemented (external evidence open) | Registration API, point-to-point ICP, point-to-plane update, covariance-weighted GICP update, evaluate, covariance storage, and prerequisite validation exist; Open3D comparison and 500k benchmark evidence remain open. |
-| RFC-0008 KD-tree Fallback & GICP Staging | Implemented | Fallback behavior and the staged GICP follow-up are implemented. |
+| RFC-0008 KD-tree Fallback & GICP Staging | Implemented | Fallback behavior and the covariance-weighted GICP follow-up are implemented. |
 | RFC-0009 Large-Scale Benchmark Suite | Implemented (external evidence open) | Smoke/standard/full modes, concat/downsample matrices, typed attrs, CSV output, just recipes, CI smoke job, and docs regeneration support are implemented; standard/full benchmark artifacts remain unrecorded. |
 | RFC-0010 Host Typed Attribute Storage Amendment | Accepted | Host typed attribute storage is documented as the accepted RFC-0002 storage model, with cross-RFC amendments for selection, GPU scope, outlier masks, and covariance storage. |
 | RFC-0011 Completion Evidence Gates | Accepted | RFC tracking now distinguishes repo-local gaps from external evidence gaps and forbids benchmark claims without recorded artifacts. |
@@ -179,7 +179,7 @@ commit `5cb3284`, and left only the RFC-0011 external evidence gates open.
 - Point-to-plane validates required target normals.
 - GICP validates required source/target packed covariance attributes.
 - `estimate_covariances(knn)` writes packed `covariance` as `float32[N, 6]`.
-- `docs/api/registration.md` documents the staged GICP behavior.
+- `docs/api/registration.md` documents the covariance-weighted GICP behavior.
 
 ### RFC-0008 - KD-tree Fallback & GICP Staging
 
@@ -409,7 +409,8 @@ Fresh verification from the 2026-05-08 PF10 completion pass:
 - Updated RFC status headers and acceptance checkboxes:
   - RFC-0001 is now marked `Active roadmap`.
   - RFC-0002, RFC-0003, RFC-0005, RFC-0006, and RFC-0007 are marked `Partial`.
-  - RFC-0008 is marked `Implemented (staged GICP follow-up open)`.
+  - RFC-0008 was initially marked `Implemented (GICP follow-up open)`; later
+    RFC-0007 work implemented the covariance-weighted GICP follow-up.
   - RFC-0009 is marked `Implemented`.
 
 ## 2026-05-07 RFC-0011 Evidence-Gate Pass
@@ -556,7 +557,7 @@ run manually then. CI installs `just` before invoking `just ci`.
 | `AttributeValue` uses host `Vec<T>` for typed attrs | Accepted by RFC-0010 so LAS/NumPy dtypes remain exact while XYZ stays tensor-backed. |
 | Added `F32x6` packed covariance variant | RFC-0007 needs `[N, 6]` covariance storage while preserving the RFC-0010 host typed attribute boundary. |
 | KD-tree falls back to brute-force on degenerate axis buckets | `kiddo` can panic on many identical values along an axis; fallback preserves correctness. |
-| GICP API staged behind covariance validation | Keeps RFC API usable while avoiding an unverified covariance-weighted solver. |
+| GICP uses covariance-weighted delta with prerequisite validation | Keeps the public API explicit about required covariance data and avoids silent fallback to a different estimator. |
 | `just ci` no longer depends on pre-commit | CI should use pytest/cargo directly per user instruction; pre-commit remains separately available. |
 | LAS point format 10 waveform payloads are reject/drop only | Point-record waveform metadata references descriptor/payload data that is not preserved yet; non-default metadata errors unless `drop_waveform=True` writes no-waveform defaults. |
 | LAS raw integer XYZ sidecars are internal metadata | Compute XYZ stays `float32`, while unchanged uncompressed LAS imports preserve raw `X/Y/Z` plus scale/offset for precision round-trips. |
