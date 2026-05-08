@@ -370,9 +370,7 @@ def run_neighbors(
         if operation == "knn_warm":
 
             def run_knn(tree=tree, query=query):
-                return [
-                    tree.search_knn_vector_3d(point, KNN_K)[1] for point in query
-                ]
+                return [tree.search_knn_vector_3d(point, KNN_K)[1] for point in query]
 
             result = benchmark(run_knn)
         else:
@@ -515,9 +513,13 @@ def run_registration(
             target.estimate_normals(
                 search_param=o3d.geometry.KDTreeSearchParamKNN(knn=KNN_K)
             )
-            estimation = o3d.pipelines.registration.TransformationEstimationPointToPlane()
+            estimation = (
+                o3d.pipelines.registration.TransformationEstimationPointToPlane()
+            )
         else:
-            estimation = o3d.pipelines.registration.TransformationEstimationPointToPoint()
+            estimation = (
+                o3d.pipelines.registration.TransformationEstimationPointToPoint()
+            )
         criteria = o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=10)
         result = benchmark(
             lambda source=source,
