@@ -75,23 +75,23 @@ explicit lossy export path.
 
 ## 4. Acceptance Criteria
 
-- [ ] Python stubs and bindings expose the decided `to_las` signature.
-- [ ] Existing Python calls keep working: `to_las(path)`, `to_las(path, True)`,
+- [x] Python stubs and bindings expose the decided `to_las` signature.
+- [x] Existing Python calls keep working: `to_las(path)`, `to_las(path, True)`,
   `to_las(path, compress=True)`, and `save_to_file()` for `.las`/`.laz` retain
   current inference and compression behavior when `point_format=None`.
-- [ ] Rust keeps backward-compatible `to_las(path, compress)` and exposes
+- [x] Rust keeps backward-compatible `to_las(path, compress)` and exposes
   explicit point format 10 options internally.
-- [ ] `point_format=10` writes LAS 1.4 point format 10.
-- [ ] Preferred PF10 precision attributes `uint16` intensity/RGB/NIR, `int16`
+- [x] `point_format=10` writes LAS 1.4 point format 10.
+- [x] Preferred PF10 precision attributes `uint16` intensity/RGB/NIR, `int16`
   scan angle, and all waveform metadata names map to LAS standard fields, not
   ExtraBytes.
-- [ ] Legacy `float32` intensity and `uint8` RGB still write correctly.
-- [ ] XYZ-only point format 10 export succeeds by materializing default option
+- [x] Legacy `float32` intensity and `uint8` RGB still write correctly.
+- [x] XYZ-only point format 10 export succeeds by materializing default option
   groups.
-- [ ] Version mismatch and unsupported explicit point formats return clear
+- [x] Version mismatch and unsupported explicit point formats return clear
   errors.
-- [ ] Partial RGB is accepted and missing channels default to zero.
-- [ ] Non-default waveform metadata is rejected unless `drop_waveform=True`.
-- [ ] Drop-mode output writes no-waveform defaults and does not emit waveform
+- [x] Partial RGB is accepted and missing channels default to zero.
+- [x] Non-default waveform metadata is rejected unless `drop_waveform=True`.
+- [x] Drop-mode output writes no-waveform defaults and does not emit waveform
   point attributes as ExtraBytes.
-- [ ] RFC-0013 implementation and docs refer to this policy.
+- [x] RFC-0013 implementation and docs refer to this policy.

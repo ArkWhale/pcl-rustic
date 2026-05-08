@@ -940,6 +940,22 @@ class TestTableIo:
         with pytest.raises(ValueError, match="waveform payload"):
             pc.to_las(str(tmp_path / "pf10_waveform.las"), point_format=10)
 
+    def test_las_point_format_10_policy_validation_and_partial_rgb(self, tmp_path):
+        pc = PointCloud.from_xyz(np.array([[1.0, 2.0, 3.0]], dtype=np.float32))
+        pc.set_attribute("red", np.array([4096], dtype=np.uint16))
+
+        path = tmp_path / "pf10_partial_rgb.las"
+        pc.to_las(str(path), point_format=10)
+        reloaded = PointCloud.from_las(str(path))
+        np.testing.assert_array_equal(reloaded.get_attribute("red"), [4096])
+        np.testing.assert_array_equal(reloaded.get_attribute("green"), [0])
+        np.testing.assert_array_equal(reloaded.get_attribute("blue"), [0])
+
+        with pytest.raises(ValueError, match="requires las_version"):
+            pc.to_las(str(tmp_path / "bad_version.las"), point_format=10, las_version="1.2")
+        with pytest.raises(ValueError, match="unsupported LAS point_format"):
+            pc.to_las(str(tmp_path / "unsupported_format.las"), point_format=9)
+
     def test_las_extra_bytes_preserve_uint64_and_int16(self, tmp_path):
         pc = PointCloud.from_xyz(
             np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]], dtype=np.float32)
