@@ -952,7 +952,9 @@ class TestTableIo:
         np.testing.assert_array_equal(reloaded.get_attribute("blue"), [0])
 
         with pytest.raises(ValueError, match="requires las_version"):
-            pc.to_las(str(tmp_path / "bad_version.las"), point_format=10, las_version="1.2")
+            pc.to_las(
+                str(tmp_path / "bad_version.las"), point_format=10, las_version="1.2"
+            )
         with pytest.raises(ValueError, match="unsupported LAS point_format"):
             pc.to_las(str(tmp_path / "unsupported_format.las"), point_format=9)
 
