@@ -42,14 +42,6 @@ impl KdTreeIndex {
         Ok(Self { inner, xyz_host })
     }
 
-    pub fn point_count(&self) -> usize {
-        self.xyz_host.len()
-    }
-
-    pub fn xyz(&self) -> &[[f32; 3]] {
-        &self.xyz_host
-    }
-
     pub fn knn(&self, query: &[[f32; 3]], k: usize) -> Result<Vec<Vec<NeighborHit>>> {
         if k == 0 {
             return Err(PointCloudError::InvalidParameter(

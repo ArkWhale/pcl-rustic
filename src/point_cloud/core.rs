@@ -99,28 +99,6 @@ impl HighPerformancePointCloud {
         })
     }
 
-    pub fn from_xyz(xyz: Vec<Vec<f32>>) -> Result<Self> {
-        if xyz.is_empty() {
-            return Err(PointCloudError::TensorShapeError(
-                "XYZ data is empty".to_string(),
-            ));
-        }
-        if !xyz.iter().all(|row| row.len() == 3) {
-            return Err(PointCloudError::TensorShapeError(
-                "XYZ must have shape [N, 3]".to_string(),
-            ));
-        }
-        let t = tensor::xyz_to_tensor(xyz)?;
-        let device = t.device();
-        Ok(Self {
-            xyz: t,
-            xyz_device: device,
-            attributes: HashMap::new(),
-            las_coordinates: None,
-            kdtree_cache: OnceCell::new(),
-        })
-    }
-
     pub fn point_count(&self) -> usize {
         tensor::tensor2_rows(&self.xyz)
     }
@@ -129,6 +107,7 @@ impl HighPerformancePointCloud {
         &self.xyz
     }
 
+    #[cfg(test)]
     pub fn xyz_mut(&mut self) -> &mut Tensor2 {
         self.kdtree_cache = OnceCell::new();
         self.las_coordinates = None;
@@ -268,22 +247,6 @@ impl HighPerformancePointCloud {
         self.attributes.contains_key("red")
             && self.attributes.contains_key("green")
             && self.attributes.contains_key("blue")
-    }
-
-    pub fn has_normals(&self) -> bool {
-        self.attributes.contains_key("nx")
-            && self.attributes.contains_key("ny")
-            && self.attributes.contains_key("nz")
-    }
-
-    pub fn get_intensity_f32(&self) -> Option<&Vec<f32>> {
-        self.attributes.get("intensity").and_then(|v| v.as_f32())
-    }
-
-    pub fn get_classification_u8(&self) -> Option<&Vec<u8>> {
-        self.attributes
-            .get("classification")
-            .and_then(|v| v.as_u8())
     }
 
     // === Memory ===

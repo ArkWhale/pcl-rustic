@@ -65,10 +65,6 @@ impl AttributeValue {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
     pub fn dtype(&self) -> AttrDType {
         match self {
             AttributeValue::F32(_) => AttrDType::F32,
@@ -111,94 +107,6 @@ impl AttributeValue {
             AttributeValue::F32x6(v) => {
                 AttributeValue::F32x6(indices.iter().map(|&i| v[i]).collect())
             }
-        })
-    }
-
-    pub fn select_mask(&self, mask: &[bool]) -> Result<Self> {
-        if mask.len() != self.len() {
-            return Err(PointCloudError::DimensionMismatch {
-                expected: self.len(),
-                actual: mask.len(),
-            });
-        }
-        Ok(match self {
-            AttributeValue::F32(v) => AttributeValue::F32(
-                v.iter()
-                    .zip(mask.iter())
-                    .filter(|(_, &m)| m)
-                    .map(|(&val, _)| val)
-                    .collect(),
-            ),
-            AttributeValue::F64(v) => AttributeValue::F64(
-                v.iter()
-                    .zip(mask.iter())
-                    .filter(|(_, &m)| m)
-                    .map(|(&val, _)| val)
-                    .collect(),
-            ),
-            AttributeValue::U8(v) => AttributeValue::U8(
-                v.iter()
-                    .zip(mask.iter())
-                    .filter(|(_, &m)| m)
-                    .map(|(&val, _)| val)
-                    .collect(),
-            ),
-            AttributeValue::U16(v) => AttributeValue::U16(
-                v.iter()
-                    .zip(mask.iter())
-                    .filter(|(_, &m)| m)
-                    .map(|(&val, _)| val)
-                    .collect(),
-            ),
-            AttributeValue::U32(v) => AttributeValue::U32(
-                v.iter()
-                    .zip(mask.iter())
-                    .filter(|(_, &m)| m)
-                    .map(|(&val, _)| val)
-                    .collect(),
-            ),
-            AttributeValue::U64(v) => AttributeValue::U64(
-                v.iter()
-                    .zip(mask.iter())
-                    .filter(|(_, &m)| m)
-                    .map(|(&val, _)| val)
-                    .collect(),
-            ),
-            AttributeValue::I16(v) => AttributeValue::I16(
-                v.iter()
-                    .zip(mask.iter())
-                    .filter(|(_, &m)| m)
-                    .map(|(&val, _)| val)
-                    .collect(),
-            ),
-            AttributeValue::I32(v) => AttributeValue::I32(
-                v.iter()
-                    .zip(mask.iter())
-                    .filter(|(_, &m)| m)
-                    .map(|(&val, _)| val)
-                    .collect(),
-            ),
-            AttributeValue::I64(v) => AttributeValue::I64(
-                v.iter()
-                    .zip(mask.iter())
-                    .filter(|(_, &m)| m)
-                    .map(|(&val, _)| val)
-                    .collect(),
-            ),
-            AttributeValue::Bool(v) => AttributeValue::Bool(
-                v.iter()
-                    .zip(mask.iter())
-                    .filter(|(_, &m)| m)
-                    .map(|(&val, _)| val)
-                    .collect(),
-            ),
-            AttributeValue::F32x6(v) => AttributeValue::F32x6(
-                v.iter()
-                    .zip(mask.iter())
-                    .filter(|(_, &m)| m)
-                    .map(|(&val, _)| val)
-                    .collect(),
-            ),
         })
     }
 
