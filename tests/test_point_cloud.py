@@ -123,6 +123,10 @@ class TestPointCloudProperties:
             "classification": np.array([2, 2, 6, 9], dtype=np.uint8),
             "source_id": np.array([1, 2, 3, 4], dtype=np.uint16),
             "point_source_uid": np.array([10, 20, 30, 40], dtype=np.uint32),
+            "wavepacket_offset": np.array(
+                [0, 2**32 + 1, 2**40 + 7, 2**48 + 11], dtype=np.uint64
+            ),
+            "scan_angle_raw": np.array([-120, -1, 1, 120], dtype=np.int16),
             "scan_angle": np.array([-3, -1, 1, 3], dtype=np.int32),
             "global_id": np.array([100, 200, 300, 400], dtype=np.int64),
             "gps_time": np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float64),
@@ -133,6 +137,29 @@ class TestPointCloudProperties:
             out = pc.get_attribute(name)
             assert out.dtype == data.dtype
             np.testing.assert_array_equal(out, data)
+
+        selected = pc.select(np.array([True, False, True, False], dtype=np.bool_))
+        np.testing.assert_array_equal(
+            selected.get_attribute("wavepacket_offset"),
+            values["wavepacket_offset"][[0, 2]],
+        )
+        np.testing.assert_array_equal(
+            selected.get_attribute("scan_angle_raw"),
+            values["scan_angle_raw"][[0, 2]],
+        )
+
+        concatenated = PointCloud.concatenate([selected, selected], "strict")
+        assert concatenated.get_attribute("wavepacket_offset").dtype == np.uint64
+        assert concatenated.get_attribute("scan_angle_raw").dtype == np.int16
+        np.testing.assert_array_equal(
+            concatenated.get_attribute("wavepacket_offset"),
+            np.concatenate(
+                [
+                    values["wavepacket_offset"][[0, 2]],
+                    values["wavepacket_offset"][[0, 2]],
+                ]
+            ),
+        )
 
         covariance = np.arange(24, dtype=np.float32).reshape(4, 6)
         pc.set_attribute("covariance", covariance)
@@ -666,6 +693,36 @@ class TestNeighborsNormalsOutliersRegistration:
 
 
 class TestTableIo:
+    def test_laspy_point_format_10_fixture_loads_with_standard_dtypes(self, tmp_path):
+        import laspy
+
+        path = tmp_path / "laspy_pf10.las"
+        header = laspy.LasHeader(version="1.4", point_format=10)
+        header.scales = np.array([0.0001, 0.0001, 0.0001])
+        header.offsets = np.array([1000.0, -2000.0, 50.0])
+        las = laspy.LasData(header)
+        las.x = np.array([1001.25, 1004.25])
+        las.y = np.array([-1997.5, -1994.5])
+        las.z = np.array([53.75, 56.75])
+        las.intensity = np.array([65535, 42], dtype=np.uint16)
+        las.red = np.array([4096, 65535], dtype=np.uint16)
+        las.green = np.array([8192, 32768], dtype=np.uint16)
+        las.blue = np.array([16384, 12345], dtype=np.uint16)
+        las.nir = np.array([111, 222], dtype=np.uint16)
+        las.scan_angle = np.array([-120, 120], dtype=np.int16)
+        las.wavepacket_offset = np.array([0, 0], dtype=np.uint64)
+        las.write(path)
+
+        pc = PointCloud.from_las(str(path))
+
+        assert pc.get_attribute("intensity").dtype == np.uint16
+        assert pc.get_attribute("scan_angle").dtype == np.int16
+        assert pc.get_attribute("wavepacket_offset").dtype == np.uint64
+        np.testing.assert_array_equal(pc.get_attribute("intensity"), [65535, 42])
+        np.testing.assert_array_equal(pc.get_attribute("red"), [4096, 65535])
+        np.testing.assert_array_equal(pc.get_attribute("nir"), [111, 222])
+        np.testing.assert_array_equal(pc.get_attribute("scan_angle"), [-120, 120])
+
     def test_las_fixture_backed_selectors_cover_standard_attributes(self, tmp_path):
         xyz = np.array(
             [
@@ -839,6 +896,70 @@ class TestTableIo:
         )
         np.testing.assert_array_equal(
             filtered_reloaded.get_attribute("flightline"), flightline[mask]
+        )
+
+    def test_las_point_format_10_python_api_round_trip_precision(self, tmp_path):
+        xyz = np.array([[1.25, 2.5, 3.75], [4.25, 5.5, 6.75]], dtype=np.float32)
+        pc = PointCloud.from_xyz(xyz)
+        pc.set_attribute("intensity", np.array([65535, 42], dtype=np.uint16))
+        pc.set_attribute("red", np.array([4096, 65535], dtype=np.uint16))
+        pc.set_attribute("green", np.array([8192, 32768], dtype=np.uint16))
+        pc.set_attribute("blue", np.array([16384, 12345], dtype=np.uint16))
+        pc.set_attribute("nir", np.array([111, 222], dtype=np.uint16))
+        pc.set_attribute("scan_angle", np.array([-120, 120], dtype=np.int16))
+        pc.set_attribute(
+            "wavepacket_offset",
+            np.array([2**32 + 1, 9_000_000_000], dtype=np.uint64),
+        )
+
+        path = tmp_path / "pf10_precision.las"
+        pc.to_las(
+            str(path),
+            point_format=10,
+            las_version="1.4",
+            drop_waveform=True,
+        )
+        reloaded = PointCloud.from_las(str(path))
+
+        assert reloaded.get_attribute("intensity").dtype == np.uint16
+        assert reloaded.get_attribute("scan_angle").dtype == np.int16
+        assert reloaded.get_attribute("wavepacket_offset").dtype == np.uint64
+        np.testing.assert_array_equal(reloaded.get_attribute("intensity"), [65535, 42])
+        np.testing.assert_array_equal(reloaded.get_attribute("red"), [4096, 65535])
+        np.testing.assert_array_equal(reloaded.get_attribute("nir"), [111, 222])
+        np.testing.assert_array_equal(reloaded.get_attribute("scan_angle"), [-120, 120])
+        np.testing.assert_array_equal(
+            reloaded.get_attribute("wavepacket_offset"),
+            [0, 0],
+        )
+
+    def test_las_point_format_10_rejects_waveform_metadata_without_drop(self, tmp_path):
+        pc = PointCloud.from_xyz(np.array([[1.0, 2.0, 3.0]], dtype=np.float32))
+        pc.set_attribute("wavepacket_offset", np.array([2**32 + 1], dtype=np.uint64))
+
+        with pytest.raises(ValueError, match="waveform payload"):
+            pc.to_las(str(tmp_path / "pf10_waveform.las"), point_format=10)
+
+    def test_las_extra_bytes_preserve_uint64_and_int16(self, tmp_path):
+        pc = PointCloud.from_xyz(
+            np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]], dtype=np.float32)
+        )
+        pc.set_attribute(
+            "custom_offset", np.array([2**32 + 1, 2**40 + 7], dtype=np.uint64)
+        )
+        pc.set_attribute("custom_scan_angle", np.array([-120, 120], dtype=np.int16))
+
+        path = tmp_path / "extra_bytes_u64_i16.las"
+        pc.to_las(str(path))
+        reloaded = PointCloud.from_las(str(path))
+
+        assert reloaded.get_attribute("custom_offset").dtype == np.uint64
+        assert reloaded.get_attribute("custom_scan_angle").dtype == np.int16
+        np.testing.assert_array_equal(
+            reloaded.get_attribute("custom_offset"), [2**32 + 1, 2**40 + 7]
+        )
+        np.testing.assert_array_equal(
+            reloaded.get_attribute("custom_scan_angle"), [-120, 120]
         )
 
     def test_csv_and_parquet_round_trip(self, tmp_path):

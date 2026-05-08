@@ -7,7 +7,7 @@
 ### LAZ/LAS 格式
 
 - `PointCloud.from_las(path: str) -> PointCloud` - 从 LAS/LAZ 文件读取点云
-- `PointCloud.to_las(path: str, compress: bool = False) -> None` - 将点云写入 LAS/LAZ 文件
+- `PointCloud.to_las(path: str, compress: bool = False, *, point_format: int | None = None, las_version: str = "1.4", drop_waveform: bool = False) -> None` - 将点云写入 LAS/LAZ 文件
 
 ### CSV 格式
 
@@ -44,6 +44,40 @@ pc_down.to_las("output.laz", compress=True)
 # 保存为 LAS（未压缩）
 pc_down.to_las("output.las", compress=False)
 ```
+
+### LAS 1.4 Point Format 10
+
+Use `point_format=10` to explicitly write LAS 1.4 point format 10. XYZ is the
+only required input; all non-XYZ LAS dimensions are optional and missing values
+are written as LAS defaults.
+
+```python
+from pcl_rustic import PointCloud
+import numpy as np
+
+pc = PointCloud.from_xyz(np.array([[1.25, 2.5, 3.75]], dtype=np.float32))
+pc.set_attribute("intensity", np.array([65535], dtype=np.uint16))
+pc.set_attribute("red", np.array([4096], dtype=np.uint16))
+pc.set_attribute("green", np.array([8192], dtype=np.uint16))
+pc.set_attribute("blue", np.array([16384], dtype=np.uint16))
+pc.set_attribute("nir", np.array([1234], dtype=np.uint16))
+pc.set_attribute("scan_angle", np.array([-120], dtype=np.int16))
+
+pc.to_las("pf10.las", point_format=10, las_version="1.4")
+```
+
+Point format 10 standard attributes use these preferred dtypes: `uint16` for
+`intensity`, `red`, `green`, `blue`, and `nir`; `int16` for raw LAS 1.4
+`scan_angle`; `uint64` for `wavepacket_offset`; `uint32` for
+`wavepacket_size`; `uint8` for packed return/classification fields; `float64`
+for `gps_time`; and `float32` for waveform location/vector fields. Legacy
+`float32` intensity and `uint8` RGB are still accepted on write.
+
+Non-default waveform metadata is rejected unless `drop_waveform=True`, because
+waveform descriptor and payload preservation is not implemented yet. Imported
+unmodified LAS coordinates preserve raw integer XYZ records and scale/offset
+metadata through row-preserving operations such as selection; coordinate
+mutations such as translate, rotate, scale, and transform drop that metadata.
 
 ### CSV 读写
 

@@ -1,5 +1,5 @@
 use crate::point_cloud::attribute_value::AttributeValue;
-use crate::point_cloud::core::HighPerformancePointCloud;
+use crate::point_cloud::core::{HighPerformancePointCloud, LasCoordinateMetadata};
 use crate::utils::error::{PointCloudError, Result};
 use crate::utils::tensor;
 use nalgebra::{Matrix3, SymmetricEigen, Vector3};
@@ -37,6 +37,12 @@ impl HighPerformancePointCloud {
                 numeric_mask(data.iter().map(|&v| v as f64), op, values, inclusive)?
             }
             AttributeValue::U32(data) => {
+                numeric_mask(data.iter().map(|&v| v as f64), op, values, inclusive)?
+            }
+            AttributeValue::U64(data) => {
+                numeric_mask(data.iter().map(|&v| v as f64), op, values, inclusive)?
+            }
+            AttributeValue::I16(data) => {
                 numeric_mask(data.iter().map(|&v| v as f64), op, values, inclusive)?
             }
             AttributeValue::I32(data) => {
@@ -351,8 +357,40 @@ impl HighPerformancePointCloud {
             None => Self::empty_on_device(result_device),
         };
         *result.attributes_mut() = new_attrs;
+        if let Some(metadata) = concatenate_las_coordinate_metadata(clouds) {
+            result.set_las_coordinate_metadata(metadata)?;
+        }
         Ok(result)
     }
+}
+
+fn concatenate_las_coordinate_metadata(
+    clouds: &[&HighPerformancePointCloud],
+) -> Option<LasCoordinateMetadata> {
+    let mut non_empty = clouds.iter().copied().filter(|cloud| !cloud.is_empty());
+    let first = non_empty.next()?;
+    let first_metadata = first.las_coordinate_metadata()?;
+    let mut raw_x = first_metadata.raw_x.clone();
+    let mut raw_y = first_metadata.raw_y.clone();
+    let mut raw_z = first_metadata.raw_z.clone();
+
+    for cloud in non_empty {
+        let metadata = cloud.las_coordinate_metadata()?;
+        if metadata.scale != first_metadata.scale || metadata.offset != first_metadata.offset {
+            return None;
+        }
+        raw_x.extend_from_slice(&metadata.raw_x);
+        raw_y.extend_from_slice(&metadata.raw_y);
+        raw_z.extend_from_slice(&metadata.raw_z);
+    }
+
+    Some(LasCoordinateMetadata {
+        raw_x,
+        raw_y,
+        raw_z,
+        scale: first_metadata.scale,
+        offset: first_metadata.offset,
+    })
 }
 
 fn numeric_mask<I>(data: I, op: &str, values: &[f64], inclusive: bool) -> Result<Vec<bool>>

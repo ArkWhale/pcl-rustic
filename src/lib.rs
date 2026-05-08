@@ -1,4 +1,7 @@
 #![recursion_limit = "256"]
+#![allow(dead_code)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::type_complexity)]
 mod interop;
 mod io;
 mod neighbors;
@@ -678,9 +681,24 @@ impl PyPointCloud {
         Ok(PyPointCloud { inner })
     }
 
-    #[pyo3(signature = (path, compress = false))]
-    fn to_las(&self, path: &str, compress: bool) -> PyResult<()> {
-        self.inner.to_las(path, compress).map_err(PyErr::from)?;
+    #[pyo3(signature = (path, compress = false, *, point_format = None, las_version = "1.4", drop_waveform = false))]
+    fn to_las(
+        &self,
+        path: &str,
+        compress: bool,
+        point_format: Option<u8>,
+        las_version: &str,
+        drop_waveform: bool,
+    ) -> PyResult<()> {
+        self.inner
+            .to_las_with_options(
+                path,
+                compress,
+                point_format,
+                Some(las_version),
+                drop_waveform,
+            )
+            .map_err(PyErr::from)?;
         Ok(())
     }
 

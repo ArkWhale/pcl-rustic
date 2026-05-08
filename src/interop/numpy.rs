@@ -122,6 +122,12 @@ fn to_u8_attr(attr: AttributeValue) -> AttributeValue {
             AttributeValue::U8(v.iter().map(|&x| x.clamp(0.0, 255.0) as u8).collect())
         }
         AttributeValue::U16(v) => AttributeValue::U8(v.iter().map(|&x| (x >> 8) as u8).collect()),
+        AttributeValue::U64(v) => {
+            AttributeValue::U8(v.iter().map(|&x| x.min(u64::from(u8::MAX)) as u8).collect())
+        }
+        AttributeValue::I16(v) => {
+            AttributeValue::U8(v.iter().map(|&x| x.clamp(0, 255) as u8).collect())
+        }
         AttributeValue::I32(v) => {
             AttributeValue::U8(v.iter().map(|&x| x.clamp(0, 255) as u8).collect())
         }
@@ -253,6 +259,20 @@ pub fn read_attribute_from_pyany(obj: &Bound<'_, pyo3::PyAny>) -> Result<Attribu
             readonly.as_array().iter().copied().collect(),
         ));
     }
+    // Try u64
+    if let Ok(arr) = obj.cast::<PyArray1<u64>>() {
+        let readonly = arr.readonly();
+        return Ok(AttributeValue::U64(
+            readonly.as_array().iter().copied().collect(),
+        ));
+    }
+    // Try i16
+    if let Ok(arr) = obj.cast::<PyArray1<i16>>() {
+        let readonly = arr.readonly();
+        return Ok(AttributeValue::I16(
+            readonly.as_array().iter().copied().collect(),
+        ));
+    }
     // Try i32
     if let Ok(arr) = obj.cast::<PyArray1<i32>>() {
         let readonly = arr.readonly();
@@ -297,6 +317,14 @@ pub fn attribute_to_numpy(py: Python<'_>, attr: &AttributeValue) -> Result<Py<Py
             IntoPyArray::into_pyarray(nd, py).into()
         }
         AttributeValue::U32(v) => {
+            let nd = Array1::from_vec(v.clone());
+            IntoPyArray::into_pyarray(nd, py).into()
+        }
+        AttributeValue::U64(v) => {
+            let nd = Array1::from_vec(v.clone());
+            IntoPyArray::into_pyarray(nd, py).into()
+        }
+        AttributeValue::I16(v) => {
             let nd = Array1::from_vec(v.clone());
             IntoPyArray::into_pyarray(nd, py).into()
         }

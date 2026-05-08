@@ -192,41 +192,41 @@ record layout required by point format 10.
 
 ## 5. Acceptance Criteria
 
-- [ ] A LAS 1.4 point format 10 fixture created with laspy loads through
+- [x] A LAS 1.4 point format 10 fixture created with laspy loads through
   `PointCloud.from_las()` without error.
-- [ ] Reader tests verify all point format 10 standard attributes round-trip
+- [x] Reader tests verify all point format 10 standard attributes round-trip
   with the dtypes in section 4.1.
-- [ ] Reader tests verify a minimal point format 10 fixture with only XYZ set
+- [x] Reader tests verify a minimal point format 10 fixture with only XYZ set
   imports successfully and materializes all point format 10 standard dimensions
   with default values and section 4.1 dtypes.
-- [ ] Reader tests verify laspy-authored standard ExtraBytes are decoded,
+- [x] Reader tests verify laspy-authored standard ExtraBytes are decoded,
   preserved separately from point format 10 standard dimensions, and collision
   names are prefixed with `extra_`.
-- [ ] Writer API can explicitly request `point_format=10`.
-- [ ] Writer tests verify point format 10 export works when only XYZ is present.
-- [ ] Writer tests verify point format 10 export materializes required
+- [x] Writer API can explicitly request `point_format=10`.
+- [x] Writer tests verify point format 10 export works when only XYZ is present.
+- [x] Writer tests verify point format 10 export materializes required
   `las::Point` option groups as default values when public optional attributes
   are absent.
-- [ ] Writer tests verify point format 10 export maps every present optional
+- [x] Writer tests verify point format 10 export maps every present optional
   attribute to its LAS standard field.
-- [ ] Writer tests verify out-of-range `return_number`, `number_of_returns`,
+- [x] Writer tests verify out-of-range `return_number`, `number_of_returns`,
   and `scanner_channel` values are rejected rather than truncated.
-- [ ] Precision tests prove 16-bit RGB/NIR, `uint64` waveform offsets,
+- [x] Precision tests prove 16-bit RGB/NIR, `uint64` waveform offsets,
   `int16` scan angle, and LAS coordinate precision are preserved through
   `from_las -> to_las -> from_las`.
-- [ ] Coordinate precision tests compare raw LAS integer `X`, `Y`, and `Z`
+- [x] Coordinate precision tests compare raw LAS integer `X`, `Y`, and `Z`
   records plus scale/offset metadata after `from_las -> to_las` for unchanged
   imported points.
-- [ ] Waveform tests prove default/no-waveform point format 10 export is valid,
+- [x] Waveform tests prove default/no-waveform point format 10 export is valid,
   and that non-default waveform metadata is either fully payload-preserved or
   rejected unless the caller explicitly opts into dropping waveform payloads.
-- [ ] Precision sidecar tests prove sidecars are gathered through selection,
+- [x] Precision sidecar tests prove sidecars are gathered through selection,
   dropped by coordinate-mutating operations, and handled deterministically by
   concat.
-- [ ] Python dtype tests prove `uint64` and `int16` work through
+- [x] Python dtype tests prove `uint64` and `int16` work through
   `set_attribute`, `get_attribute`, selection, concat, and LAS ExtraBytes.
-- [ ] Existing LAS standard-attribute and ExtraBytes tests still pass.
-- [ ] `docs/api/io.md` or equivalent I/O docs document point format 10 support,
+- [x] Existing LAS standard-attribute and ExtraBytes tests still pass.
+- [x] `docs/api/io.md` or equivalent I/O docs document point format 10 support,
   optional attributes, attribute names, dtypes, and precision behavior.
 
 ## 6. Risks And Mitigations

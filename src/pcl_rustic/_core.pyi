@@ -123,7 +123,15 @@ class PointCloud:
     def octree(self, max_depth: int) -> "Octree": ...
     def to(self, device: str) -> "PointCloud": ...
     def device(self) -> str: ...
-    def to_las(self, path: str, compress: bool = False) -> None: ...
+    def to_las(
+        self,
+        path: str,
+        compress: bool = False,
+        *,
+        point_format: Optional[int] = None,
+        las_version: str = "1.4",
+        drop_waveform: bool = False,
+    ) -> None: ...
     def to_csv(
         self,
         path: str,

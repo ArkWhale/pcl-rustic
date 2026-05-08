@@ -7,6 +7,8 @@ pub enum AttrDType {
     U8,
     U16,
     U32,
+    U64,
+    I16,
     I32,
     I64,
     Bool,
@@ -21,6 +23,8 @@ impl std::fmt::Display for AttrDType {
             AttrDType::U8 => write!(f, "uint8"),
             AttrDType::U16 => write!(f, "uint16"),
             AttrDType::U32 => write!(f, "uint32"),
+            AttrDType::U64 => write!(f, "uint64"),
+            AttrDType::I16 => write!(f, "int16"),
             AttrDType::I32 => write!(f, "int32"),
             AttrDType::I64 => write!(f, "int64"),
             AttrDType::Bool => write!(f, "bool"),
@@ -36,6 +40,8 @@ pub enum AttributeValue {
     U8(Vec<u8>),
     U16(Vec<u16>),
     U32(Vec<u32>),
+    U64(Vec<u64>),
+    I16(Vec<i16>),
     I32(Vec<i32>),
     I64(Vec<i64>),
     Bool(Vec<bool>),
@@ -50,6 +56,8 @@ impl AttributeValue {
             AttributeValue::U8(v) => v.len(),
             AttributeValue::U16(v) => v.len(),
             AttributeValue::U32(v) => v.len(),
+            AttributeValue::U64(v) => v.len(),
+            AttributeValue::I16(v) => v.len(),
             AttributeValue::I32(v) => v.len(),
             AttributeValue::I64(v) => v.len(),
             AttributeValue::Bool(v) => v.len(),
@@ -68,6 +76,8 @@ impl AttributeValue {
             AttributeValue::U8(_) => AttrDType::U8,
             AttributeValue::U16(_) => AttrDType::U16,
             AttributeValue::U32(_) => AttrDType::U32,
+            AttributeValue::U64(_) => AttrDType::U64,
+            AttributeValue::I16(_) => AttrDType::I16,
             AttributeValue::I32(_) => AttrDType::I32,
             AttributeValue::I64(_) => AttrDType::I64,
             AttributeValue::Bool(_) => AttrDType::Bool,
@@ -91,6 +101,8 @@ impl AttributeValue {
             AttributeValue::U8(v) => AttributeValue::U8(indices.iter().map(|&i| v[i]).collect()),
             AttributeValue::U16(v) => AttributeValue::U16(indices.iter().map(|&i| v[i]).collect()),
             AttributeValue::U32(v) => AttributeValue::U32(indices.iter().map(|&i| v[i]).collect()),
+            AttributeValue::U64(v) => AttributeValue::U64(indices.iter().map(|&i| v[i]).collect()),
+            AttributeValue::I16(v) => AttributeValue::I16(indices.iter().map(|&i| v[i]).collect()),
             AttributeValue::I32(v) => AttributeValue::I32(indices.iter().map(|&i| v[i]).collect()),
             AttributeValue::I64(v) => AttributeValue::I64(indices.iter().map(|&i| v[i]).collect()),
             AttributeValue::Bool(v) => {
@@ -139,6 +151,20 @@ impl AttributeValue {
                     .collect(),
             ),
             AttributeValue::U32(v) => AttributeValue::U32(
+                v.iter()
+                    .zip(mask.iter())
+                    .filter(|(_, &m)| m)
+                    .map(|(&val, _)| val)
+                    .collect(),
+            ),
+            AttributeValue::U64(v) => AttributeValue::U64(
+                v.iter()
+                    .zip(mask.iter())
+                    .filter(|(_, &m)| m)
+                    .map(|(&val, _)| val)
+                    .collect(),
+            ),
+            AttributeValue::I16(v) => AttributeValue::I16(
                 v.iter()
                     .zip(mask.iter())
                     .filter(|(_, &m)| m)
@@ -211,6 +237,20 @@ impl AttributeValue {
         }
     }
 
+    pub fn as_u64(&self) -> Option<&Vec<u64>> {
+        match self {
+            AttributeValue::U64(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn as_i16(&self) -> Option<&Vec<i16>> {
+        match self {
+            AttributeValue::I16(v) => Some(v),
+            _ => None,
+        }
+    }
+
     pub fn as_i32(&self) -> Option<&Vec<i32>> {
         match self {
             AttributeValue::I32(v) => Some(v),
@@ -246,6 +286,8 @@ impl AttributeValue {
             AttributeValue::U8(v) => v.iter().map(|&x| x as f32).collect(),
             AttributeValue::U16(v) => v.iter().map(|&x| x as f32).collect(),
             AttributeValue::U32(v) => v.iter().map(|&x| x as f32).collect(),
+            AttributeValue::U64(v) => v.iter().map(|&x| x as f32).collect(),
+            AttributeValue::I16(v) => v.iter().map(|&x| x as f32).collect(),
             AttributeValue::I32(v) => v.iter().map(|&x| x as f32).collect(),
             AttributeValue::I64(v) => v.iter().map(|&x| x as f32).collect(),
             AttributeValue::Bool(v) => v.iter().map(|&x| if x { 1.0 } else { 0.0 }).collect(),
@@ -260,6 +302,8 @@ impl AttributeValue {
             AttributeValue::U8(_) => 1,
             AttributeValue::U16(_) => 2,
             AttributeValue::U32(_) => 4,
+            AttributeValue::U64(_) => 8,
+            AttributeValue::I16(_) => 2,
             AttributeValue::I32(_) => 4,
             AttributeValue::I64(_) => 8,
             AttributeValue::Bool(_) => 1,
@@ -323,6 +367,20 @@ impl AttributeValue {
                 }
                 AttributeValue::U32(out)
             }
+            AttrDType::U64 => {
+                let mut out = Vec::new();
+                for v in values {
+                    out.extend_from_slice(v.as_u64().unwrap());
+                }
+                AttributeValue::U64(out)
+            }
+            AttrDType::I16 => {
+                let mut out = Vec::new();
+                for v in values {
+                    out.extend_from_slice(v.as_i16().unwrap());
+                }
+                AttributeValue::I16(out)
+            }
             AttrDType::I32 => {
                 let mut out = Vec::new();
                 for v in values {
@@ -361,6 +419,8 @@ impl AttributeValue {
             AttrDType::U8 => AttributeValue::U8(vec![0; len]),
             AttrDType::U16 => AttributeValue::U16(vec![0; len]),
             AttrDType::U32 => AttributeValue::U32(vec![0; len]),
+            AttrDType::U64 => AttributeValue::U64(vec![0; len]),
+            AttrDType::I16 => AttributeValue::I16(vec![0; len]),
             AttrDType::I32 => AttributeValue::I32(vec![0; len]),
             AttrDType::I64 => AttributeValue::I64(vec![0; len]),
             AttrDType::Bool => AttributeValue::Bool(vec![false; len]),

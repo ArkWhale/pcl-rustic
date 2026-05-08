@@ -1,4 +1,4 @@
-use crate::point_cloud::{attribute_value::AttributeValue, core::HighPerformancePointCloud};
+use crate::point_cloud::core::HighPerformancePointCloud;
 use crate::utils::error::{PointCloudError, Result};
 use nalgebra::{Matrix3, Matrix4, SMatrix, SVector, Vector3, Vector4, SVD};
 
@@ -405,6 +405,7 @@ fn transform_points(points: &[[f32; 3]], transformation: &Matrix4<f32>) -> Vec<[
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::point_cloud::attribute_value::AttributeValue;
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha8Rng;
 

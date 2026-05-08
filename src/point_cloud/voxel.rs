@@ -116,6 +116,12 @@ impl HighPerformancePointCloud {
                 crate::point_cloud::attribute_value::AttrDType::U32 => {
                     AttributeValue::U32(Vec::with_capacity(n_voxels))
                 }
+                crate::point_cloud::attribute_value::AttrDType::U64 => {
+                    AttributeValue::U64(Vec::with_capacity(n_voxels))
+                }
+                crate::point_cloud::attribute_value::AttrDType::I16 => {
+                    AttributeValue::I16(Vec::with_capacity(n_voxels))
+                }
                 crate::point_cloud::attribute_value::AttrDType::I32 => {
                     AttributeValue::I32(Vec::with_capacity(n_voxels))
                 }
@@ -203,6 +209,12 @@ fn average_attribute_into(out: &mut AttributeValue, src: &AttributeValue, indice
         (AttributeValue::U32(out_vec), AttributeValue::U32(src_vec)) => {
             out_vec.push(mode_u32(src_vec, indices));
         }
+        (AttributeValue::U64(out_vec), AttributeValue::U64(src_vec)) => {
+            out_vec.push(mode_u64(src_vec, indices));
+        }
+        (AttributeValue::I16(out_vec), AttributeValue::I16(src_vec)) => {
+            out_vec.push(mode_i16(src_vec, indices));
+        }
         (AttributeValue::I32(out_vec), AttributeValue::I32(src_vec)) => {
             out_vec.push(mode_i32(src_vec, indices));
         }
@@ -256,6 +268,30 @@ fn mode_u16(data: &[u16], indices: &[usize]) -> u16 {
 
 fn mode_u32(data: &[u32], indices: &[usize]) -> u32 {
     let mut counts: HashMap<u32, usize> = HashMap::new();
+    for &i in indices {
+        *counts.entry(data[i]).or_insert(0) += 1;
+    }
+    counts
+        .into_iter()
+        .max_by_key(|(_, c)| *c)
+        .map(|(v, _)| v)
+        .unwrap_or(0)
+}
+
+fn mode_u64(data: &[u64], indices: &[usize]) -> u64 {
+    let mut counts: HashMap<u64, usize> = HashMap::new();
+    for &i in indices {
+        *counts.entry(data[i]).or_insert(0) += 1;
+    }
+    counts
+        .into_iter()
+        .max_by_key(|(_, c)| *c)
+        .map(|(v, _)| v)
+        .unwrap_or(0)
+}
+
+fn mode_i16(data: &[i16], indices: &[usize]) -> i16 {
+    let mut counts: HashMap<i16, usize> = HashMap::new();
     for &i in indices {
         *counts.entry(data[i]).or_insert(0) += 1;
     }

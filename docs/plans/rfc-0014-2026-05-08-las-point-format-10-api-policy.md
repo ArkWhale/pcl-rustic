@@ -70,7 +70,7 @@ LAS 1.4 format and leaves room for future explicit LAS version behavior.
 The waveform policy is intentionally conservative. Writing non-default waveform
 metadata without descriptor and payload preservation could create references to
 missing or invalid waveform data. Reject-by-default is safer than silently
-emitting corrupt metadata, while `drop_waveform_payload=True` gives callers an
+emitting corrupt metadata, while `drop_waveform=True` gives callers an
 explicit lossy export path.
 
 ## 4. Acceptance Criteria

@@ -6,10 +6,20 @@ use crate::utils::tensor::Tensor2;
 use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LasCoordinateMetadata {
+    pub raw_x: Vec<i32>,
+    pub raw_y: Vec<i32>,
+    pub raw_z: Vec<i32>,
+    pub scale: [f64; 3],
+    pub offset: [f64; 3],
+}
+
 pub struct HighPerformancePointCloud {
     xyz: Tensor2,
     xyz_device: tensor::BackendDevice,
     attributes: HashMap<String, AttributeValue>,
+    las_coordinates: Option<LasCoordinateMetadata>,
     kdtree_cache: OnceCell<KdTreeIndex>,
 }
 
@@ -19,6 +29,7 @@ impl Clone for HighPerformancePointCloud {
             xyz: self.xyz.clone(),
             xyz_device: self.xyz_device.clone(),
             attributes: self.attributes.clone(),
+            las_coordinates: self.las_coordinates.clone(),
             kdtree_cache: OnceCell::new(),
         }
     }
@@ -30,6 +41,7 @@ impl HighPerformancePointCloud {
             xyz: tensor::empty_xyz(),
             xyz_device: tensor::cpu_device(),
             attributes: HashMap::new(),
+            las_coordinates: None,
             kdtree_cache: OnceCell::new(),
         }
     }
@@ -47,6 +59,7 @@ impl HighPerformancePointCloud {
             xyz,
             xyz_device: device,
             attributes: HashMap::new(),
+            las_coordinates: None,
             kdtree_cache: OnceCell::new(),
         })
     }
@@ -56,6 +69,7 @@ impl HighPerformancePointCloud {
             xyz: tensor::empty_xyz(),
             xyz_device: device,
             attributes: HashMap::new(),
+            las_coordinates: None,
             kdtree_cache: OnceCell::new(),
         }
     }
@@ -80,6 +94,7 @@ impl HighPerformancePointCloud {
             xyz: t,
             xyz_device: device.clone(),
             attributes: HashMap::new(),
+            las_coordinates: None,
             kdtree_cache: OnceCell::new(),
         })
     }
@@ -101,6 +116,7 @@ impl HighPerformancePointCloud {
             xyz: t,
             xyz_device: device,
             attributes: HashMap::new(),
+            las_coordinates: None,
             kdtree_cache: OnceCell::new(),
         })
     }
@@ -115,11 +131,13 @@ impl HighPerformancePointCloud {
 
     pub fn xyz_mut(&mut self) -> &mut Tensor2 {
         self.kdtree_cache = OnceCell::new();
+        self.las_coordinates = None;
         &mut self.xyz
     }
 
     pub fn set_xyz(&mut self, xyz: Tensor2) {
         self.kdtree_cache = OnceCell::new();
+        self.las_coordinates = None;
         self.xyz_device = xyz.device();
         self.xyz = xyz;
     }
@@ -158,6 +176,7 @@ impl HighPerformancePointCloud {
             xyz,
             xyz_device: device,
             attributes: self.attributes.clone(),
+            las_coordinates: self.las_coordinates.clone(),
             kdtree_cache: OnceCell::new(),
         }
     }
@@ -178,6 +197,32 @@ impl HighPerformancePointCloud {
 
     pub fn attributes_mut(&mut self) -> &mut HashMap<String, AttributeValue> {
         &mut self.attributes
+    }
+
+    pub(crate) fn las_coordinate_metadata(&self) -> Option<&LasCoordinateMetadata> {
+        self.las_coordinates.as_ref()
+    }
+
+    pub(crate) fn set_las_coordinate_metadata(
+        &mut self,
+        metadata: LasCoordinateMetadata,
+    ) -> Result<()> {
+        let point_count = self.point_count();
+        if metadata.raw_x.len() != point_count
+            || metadata.raw_y.len() != point_count
+            || metadata.raw_z.len() != point_count
+        {
+            return Err(PointCloudError::DimensionMismatch {
+                expected: point_count,
+                actual: metadata
+                    .raw_x
+                    .len()
+                    .max(metadata.raw_y.len())
+                    .max(metadata.raw_z.len()),
+            });
+        }
+        self.las_coordinates = Some(metadata);
+        Ok(())
     }
 
     pub fn get_attribute(&self, name: &str) -> Option<&AttributeValue> {
@@ -260,6 +305,9 @@ impl HighPerformancePointCloud {
                     .attributes
                     .insert(name.clone(), attr.gather(indices)?);
             }
+            if let Some(metadata) = self.gather_las_coordinate_metadata(indices) {
+                result.las_coordinates = Some(metadata);
+            }
             return Ok(result);
         }
         let n = self.point_count();
@@ -281,7 +329,21 @@ impl HighPerformancePointCloud {
                 .attributes
                 .insert(name.clone(), attr.gather(indices)?);
         }
+        if let Some(metadata) = self.gather_las_coordinate_metadata(indices) {
+            result.las_coordinates = Some(metadata);
+        }
         Ok(result)
+    }
+
+    fn gather_las_coordinate_metadata(&self, indices: &[usize]) -> Option<LasCoordinateMetadata> {
+        let metadata = self.las_coordinates.as_ref()?;
+        Some(LasCoordinateMetadata {
+            raw_x: indices.iter().map(|&i| metadata.raw_x[i]).collect(),
+            raw_y: indices.iter().map(|&i| metadata.raw_y[i]).collect(),
+            raw_z: indices.iter().map(|&i| metadata.raw_z[i]).collect(),
+            scale: metadata.scale,
+            offset: metadata.offset,
+        })
     }
 
     pub fn select_mask(&self, mask: &[bool]) -> Result<Self> {
