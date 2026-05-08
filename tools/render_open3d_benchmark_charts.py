@@ -87,7 +87,10 @@ def read_benchmark_records(paths: Iterable[Path]) -> list[BenchmarkRecord]:
 
 
 def _record_from_benchmark(path: Path, benchmark: dict[str, Any]) -> BenchmarkRecord:
-    params = benchmark.get("params") or {}
+    params = {
+        **(benchmark.get("params") or {}),
+        **(benchmark.get("extra_info") or {}),
+    }
     stats = benchmark.get("stats") or {}
     operation = str(params.get("operation") or benchmark.get("group") or "")
     comparison_status = _comparison_status(params)

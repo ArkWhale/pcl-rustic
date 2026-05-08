@@ -54,6 +54,24 @@ def _write_pytest_benchmark_json(path: Path) -> None:
                 "stats": {"mean": 0.025, "min": 0.023, "max": 0.03},
             },
             {
+                "name": "pcl_rustic__transform__smoke__N1000",
+                "fullname": "tests/test_open3d_benchmark.py::test_extra_info",
+                "group": "transform",
+                "params": {
+                    "library": "pcl_rustic",
+                    "operation": "transform",
+                    "case_id": "smoke-1000",
+                    "point_count": 1000,
+                    "comparable": True,
+                },
+                "extra_info": {
+                    "output_points": 1000,
+                    "git_sha": "abc123",
+                    "pcl_rustic_version": "0.1.0",
+                },
+                "stats": {"mean": 0.005},
+            },
+            {
                 "name": "pcl_rustic__typed_concat__smoke__N1000",
                 "fullname": "tests/test_open3d_benchmark.py::test_pcl_only",
                 "group": "typed_concat",
@@ -84,12 +102,16 @@ def test_reads_pytest_benchmark_records(tmp_path: Path) -> None:
         "pcl_rustic",
         "open3d",
         "pcl_rustic",
+        "pcl_rustic",
     ]
     assert records[0].operation == "voxel_downsample"
     assert records[0].point_count == 1000
     assert records[0].mean_s == 0.01
     assert records[0].source_json == str(json_path)
-    assert records[2].comparison_status == "pcl_rustic_only"
+    assert records[2].operation == "transform"
+    assert records[2].output_points == 1000
+    assert records[2].git_sha == "abc123"
+    assert records[3].comparison_status == "pcl_rustic_only"
 
 
 def test_summary_rows_include_speedup_and_exclusions(tmp_path: Path) -> None:
