@@ -1,4 +1,4 @@
-# Implementation Progress - RFC 0002-0014
+# Implementation Progress - RFC 0002-0015
 
 ## Current Status: Repo-Local RFCs Implemented; External Evidence Gates Remain
 
@@ -22,6 +22,9 @@ point format 10 export API and waveform metadata drop/reject policy. Commits
 clean after those commits. A 2026-05-08 RFC-0002 through RFC-0012 loop found no
 remaining repo-local implementation gaps, removed redundant internal helpers in
 commit `5cb3284`, and left only the RFC-0011 external evidence gates open.
+RFC-0015 was drafted on 2026-05-08 to add pytest-benchmark based Open3D
+comparison benchmarks and Plotly chart rendering from recorded benchmark
+artifacts.
 
 | RFC | Status | Summary |
 |---|---|---|
@@ -38,6 +41,7 @@ commit `5cb3284`, and left only the RFC-0011 external evidence gates open.
 | RFC-0012 RFC-0004 Device Residency Scope | Accepted | RFC-0004 repo-local completion now requires source/common-device XYZ results for selection, concat, voxel downsample, and transforms, while measured GPU speedup remains external evidence. |
 | RFC-0013 LAS Point Format 10 Precision Support | Implemented | LAS 1.4 point format 10 read/write, optional standard attributes, uint16 RGB/NIR, waveform metadata default/reject/drop behavior, raw coordinate precision sidecars, standard ExtraBytes collision handling, and uint64/int16 typed storage are implemented and tested. |
 | RFC-0014 LAS Point Format 10 Export API And Payload Policy | Implemented | Python/Rust-compatible `to_las` policy, `point_format=10`, `las_version`, `drop_waveform`, partial RGB defaults, version validation, unsupported format errors, and waveform metadata policy are implemented and tested. |
+| RFC-0015 Open3D Comparison Benchmark Charts | Draft | Proposes pytest-benchmark based pcl-rustic/Open3D comparison benchmarks across point-count scales, with Plotly charts generated from recorded benchmark JSON artifacts. |
 
 ## Implemented Evidence
 
@@ -322,6 +326,11 @@ implementation.
 - No repo-local implementation gap remains. The explicit `point_format=10`
   export API policy is implemented with backward-compatible existing LAS calls,
   version validation, partial RGB defaults, and waveform metadata policy tests.
+
+### RFC-0015
+
+- Draft RFC only. No implementation exists yet for pytest-benchmark based
+  Open3D comparison benchmarks or Plotly chart rendering.
 
 ## External Evidence Register
 

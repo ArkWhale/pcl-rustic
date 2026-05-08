@@ -28,6 +28,7 @@ rfc-{id}-{YYYY-MM-DD}-{kebab-case-title}.md
 | [RFC-0012](rfc-0012-2026-05-07-rfc0004-device-residency-scope.md) | RFC-0004 Device Residency Scope | Accepted | RFC-0004 amendment |
 | [RFC-0013](rfc-0013-2026-05-07-las-point-format-10.md) | LAS Point Format 10 Precision Support | Implemented | LAS/LAZ I/O |
 | [RFC-0014](rfc-0014-2026-05-08-las-point-format-10-api-policy.md) | LAS Point Format 10 Export API And Payload Policy | Implemented | RFC-0013 policy |
+| [RFC-0015](rfc-0015-2026-05-08-open3d-comparison-charts.md) | Open3D Comparison Benchmark Charts | Draft | Benchmarking / migration evidence |
 
 ## Process
 
