@@ -19,7 +19,9 @@ RFC-0013 was added and accepted on 2026-05-07 to require LAS 1.4 point format
 dimensions. RFC-0014 was added and accepted on 2026-05-08 to pin the explicit
 point format 10 export API and waveform metadata drop/reject policy. Commits
 `fda5273` and `7a46e3a` implement and test RFC-0013/RFC-0014; the worktree was
-clean after those commits.
+clean after those commits. A 2026-05-08 RFC-0002 through RFC-0012 loop found no
+remaining repo-local implementation gaps, removed redundant internal helpers in
+commit `5cb3284`, and left only the RFC-0011 external evidence gates open.
 
 | RFC | Status | Summary |
 |---|---|---|
@@ -333,6 +335,29 @@ implementation.
 | RFC-0006 | 10M-point SOR benchmark | unrecorded | — | — | Reference benchmark hardware | open | Repo-local SOR/ROR behavior and LAS standard/custom attribute propagation are implemented. |
 | RFC-0007 | Open3D Bunny comparison and 500k registration benchmark | unrecorded | — | — | Bundled Bunny fixture / reference CPU | open | Repo-local point-to-point, point-to-plane, and GICP solvers are implemented. |
 | RFC-0009 | Standard/full benchmark CSVs | unrecorded | — | — | High-memory benchmark hardware | open | Harness exists; measured artifacts are absent. |
+
+## 2026-05-08 RFC-0002 Through RFC-0012 Loop
+
+- Re-audited RFC-0002 through RFC-0012 acceptance checkboxes. The remaining
+  unchecked items are external evidence/doc gates: Multica workspace note,
+  hosted Linux/macOS/Windows `just ci`, high-memory benchmark runs, GPU speedup
+  artifact, Open3D comparison artifact, and benchmark docs generated from
+  recorded CSVs.
+- Removed redundant internal helpers after implementation review:
+  `#![allow(dead_code)]`, unused tensor conversion/validation helpers, unused
+  attribute selection helpers, unused KD-tree accessors, and unused point-cloud
+  getters.
+- Narrowed `HighPerformancePointCloud::xyz_mut()` to test builds because its
+  only current use is the KD-tree cache invalidation test.
+- Cleanup commit: `5cb3284 refactor: remove redundant internal helpers`.
+
+Fresh verification from the 2026-05-08 RFC-0002 through RFC-0012 cleanup loop:
+
+- `rtk cargo fmt` passed.
+- `rtk cargo test --lib` passed: 40/40 Rust unit tests.
+- `rtk cargo clippy -- -D warnings` passed with no issues found.
+- `rtk uv run pytest tests/test_point_cloud.py -q --no-cov` passed: 60/60
+  Python tests.
 
 ## 2026-05-08 LAS Point Format 10 Completion Pass
 
