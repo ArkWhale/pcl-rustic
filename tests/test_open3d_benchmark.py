@@ -24,6 +24,7 @@ pytestmark = [pytest.mark.benchmark, pytest.mark.slow]
 SMOKE_POINT_COUNTS = (1_000, 10_000)
 STANDARD_POINT_COUNTS = (10_000, 100_000, 1_000_000)
 FULL_POINT_COUNTS = (10_000, 100_000, 1_000_000, 10_000_000)
+LIBRARIES = ("pcl_rustic", "open3d")
 VOXEL_SIZE = 0.20
 KNN_K = 16
 RADIUS = 0.35
@@ -72,6 +73,26 @@ def comparable_operations() -> tuple[str, ...]:
 
 def benchmark_mode(request: pytest.FixtureRequest) -> str:
     return str(request.config.getoption("--benchmark-mode"))
+
+
+def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
+    required = {"operation", "library", "case"}
+    if not required.issubset(metafunc.fixturenames):
+        return
+
+    mode = str(metafunc.config.getoption("--benchmark-mode"))
+    params = [
+        pytest.param(
+            operation,
+            library,
+            case,
+            id=f"{library}-{operation}-{case.case_id}",
+        )
+        for operation in comparable_operations()
+        for library in LIBRARIES
+        for case in comparison_cases(mode)
+    ]
+    metafunc.parametrize(("operation", "library", "case"), params)
 
 
 @pytest.fixture
@@ -189,406 +210,331 @@ def benchmark_fresh_input(
     return benchmark(lambda: operation(setup()))
 
 
-def assert_transform_equivalent(before: np.ndarray, after: np.ndarray) -> None:
-    matrix = transform_matrix()
-    expected = before @ matrix[:3, :3].T + matrix[:3, 3]
-    np.testing.assert_allclose(after, expected, rtol=1e-5, atol=1e-5)
-
-
 def transform_matrix() -> np.ndarray:
     matrix = np.eye(4, dtype=np.float32)
     matrix[:3, 3] = np.array([1.0, -2.0, 0.5], dtype=np.float32)
     return matrix
 
 
-@pytest.mark.parametrize("library", ("pcl_rustic", "open3d"))
-def test_construction_benchmark(
-    request: pytest.FixtureRequest,
-    benchmark_runner,
-    open3d_module,
-    library: str,
-) -> None:
-    o3d = open3d_module
-    for case in comparison_cases(benchmark_mode(request)):
-        xyz = generate_xyz(case)
-        if library == "pcl_rustic":
-            result = benchmark_runner(lambda xyz=xyz: PointCloud.from_xyz(xyz))
-            output_points = result.point_count()
-            np.testing.assert_allclose(result.get_xyz(), xyz, rtol=1e-6, atol=1e-6)
-        else:
-            result = benchmark_runner(lambda xyz=xyz: make_open3d_cloud(o3d, xyz))
-            output_points = len(result.points)
-            np.testing.assert_allclose(
-                np.asarray(result.points), xyz, rtol=1e-6, atol=1e-6
-            )
-        attach_metadata(
-            benchmark_runner,
-            make_metadata(
-                library=library,
-                operation="construction",
-                case=case,
-                output_points=output_points,
-                comparable=True,
-                extra={"cache_policy": "none"},
-            ),
-        )
-
-
-@pytest.mark.parametrize("library", ("pcl_rustic", "open3d"))
-def test_transform_benchmark(
-    request: pytest.FixtureRequest,
-    benchmark_runner,
-    open3d_module,
-    library: str,
-) -> None:
-    o3d = open3d_module
+def assert_transform_equivalent(before: np.ndarray, after: np.ndarray) -> None:
     matrix = transform_matrix()
-    for case in comparison_cases(benchmark_mode(request)):
-        xyz = generate_xyz(case)
-        if library == "pcl_rustic":
-            result = benchmark_fresh_input(
-                benchmark_runner,
-                lambda xyz=xyz: make_pcl_cloud(xyz),
-                lambda cloud: cloud.transform(matrix),
-            )
-            result_xyz = result.get_xyz()
-        else:
-
-            def transform_open3d(cloud):
-                cloud.transform(matrix.astype(np.float64))
-                return cloud
-
-            result = benchmark_fresh_input(
-                benchmark_runner,
-                lambda xyz=xyz: make_open3d_cloud(o3d, xyz),
-                transform_open3d,
-            )
-            result_xyz = np.asarray(result.points)
-        assert_transform_equivalent(xyz, result_xyz)
-        attach_metadata(
-            benchmark_runner,
-            make_metadata(
-                library=library,
-                operation="transform",
-                case=case,
-                output_points=len(result_xyz),
-                comparable=True,
-                extra={"cache_policy": "none"},
-            ),
-        )
+    expected = before @ matrix[:3, :3].T + matrix[:3, 3]
+    np.testing.assert_allclose(after, expected, rtol=1e-5, atol=1e-5)
 
 
-@pytest.mark.parametrize("library", ("pcl_rustic", "open3d"))
-def test_voxel_downsample_benchmark(
+def test_open3d_comparison_benchmark(
     request: pytest.FixtureRequest,
     benchmark_runner,
     open3d_module,
-    library: str,
-) -> None:
-    o3d = open3d_module
-    for case in comparison_cases(benchmark_mode(request)):
-        xyz = generate_xyz(case)
-        if library == "pcl_rustic":
-            result = benchmark_fresh_input(
-                benchmark_runner,
-                lambda xyz=xyz: make_pcl_cloud(xyz),
-                lambda cloud: cloud.voxel_downsample(
-                    VOXEL_SIZE,
-                    DownsampleStrategy.NEAREST_TO_CENTROID,
-                ),
-            )
-            output_points = result.point_count()
-        else:
-            result = benchmark_fresh_input(
-                benchmark_runner,
-                lambda xyz=xyz: make_open3d_cloud(o3d, xyz),
-                lambda cloud: cloud.voxel_down_sample(VOXEL_SIZE),
-            )
-            output_points = len(result.points)
-        assert 0 < output_points <= case.point_count
-        attach_metadata(
-            benchmark_runner,
-            make_metadata(
-                library=library,
-                operation="voxel_downsample",
-                case=case,
-                output_points=output_points,
-                comparable=True,
-                extra={"voxel_size": VOXEL_SIZE, "cache_policy": "none"},
-            ),
-        )
-
-
-@pytest.mark.parametrize("operation", ("knn_warm", "radius_search_warm"))
-@pytest.mark.parametrize("library", ("pcl_rustic", "open3d"))
-def test_neighbor_benchmark(
-    request: pytest.FixtureRequest,
-    benchmark_runner,
-    open3d_module,
-    library: str,
     operation: str,
-) -> None:
-    o3d = open3d_module
-    for case in comparison_cases(benchmark_mode(request)):
-        xyz = generate_xyz(case)
-        query = xyz[: min(64, len(xyz))]
-        if library == "pcl_rustic":
-            cloud = make_pcl_cloud(xyz)
-            if operation == "knn_warm":
-                cloud.knn(query[:1], KNN_K)
-                result = benchmark_runner(
-                    lambda cloud=cloud, query=query: cloud.knn(query, KNN_K)
-                )
-                output_points = len(result[0])
-            else:
-                cloud.radius_search(query[:1], RADIUS)
-                result = benchmark_runner(
-                    lambda cloud=cloud, query=query: cloud.radius_search(query, RADIUS)
-                )
-                output_points = sum(len(indices) for indices in result)
-        else:
-            cloud = make_open3d_cloud(o3d, xyz)
-            tree = o3d.geometry.KDTreeFlann(cloud)
-            if operation == "knn_warm":
-
-                def run_knn(tree=tree, query=query):
-                    return [
-                        tree.search_knn_vector_3d(point, KNN_K)[1] for point in query
-                    ]
-
-                result = benchmark_runner(run_knn)
-                output_points = sum(len(indices) for indices in result)
-            else:
-
-                def run_radius(tree=tree, query=query):
-                    return [
-                        tree.search_radius_vector_3d(point, RADIUS)[1]
-                        for point in query
-                    ]
-
-                result = benchmark_runner(run_radius)
-                output_points = sum(len(indices) for indices in result)
-        attach_metadata(
-            benchmark_runner,
-            make_metadata(
-                library=library,
-                operation=operation,
-                case=case,
-                output_points=output_points,
-                comparable=True,
-                extra={
-                    "query_count": len(query),
-                    "neighbors": KNN_K if operation == "knn_warm" else "",
-                    "radius": RADIUS if operation == "radius_search_warm" else "",
-                    "cache_policy": "warm",
-                },
-            ),
-        )
-
-
-@pytest.mark.parametrize("library", ("pcl_rustic", "open3d"))
-def test_estimate_normals_benchmark(
-    request: pytest.FixtureRequest,
-    benchmark_runner,
-    open3d_module,
     library: str,
+    case: ComparisonCase,
 ) -> None:
     o3d = open3d_module
-    for case in comparison_cases(benchmark_mode(request)):
-        xyz = generate_plane_xyz(case)
-        if library == "pcl_rustic":
-
-            def estimate(cloud: PointCloud):
-                cloud.estimate_normals(NormalSearch.knn(KNN_K))
-                return cloud
-
-            result = benchmark_fresh_input(
-                benchmark_runner,
-                lambda xyz=xyz: make_pcl_cloud(xyz),
-                estimate,
-            )
-            output_points = result.point_count()
-        else:
-
-            def estimate_open3d(cloud):
-                cloud.estimate_normals(
-                    search_param=o3d.geometry.KDTreeSearchParamKNN(knn=KNN_K)
-                )
-                return cloud
-
-            result = benchmark_fresh_input(
-                benchmark_runner,
-                lambda xyz=xyz: make_open3d_cloud(o3d, xyz),
-                estimate_open3d,
-            )
-            output_points = len(result.points)
-        attach_metadata(
-            benchmark_runner,
-            make_metadata(
-                library=library,
-                operation="estimate_normals",
-                case=case,
-                output_points=output_points,
-                comparable=True,
-                extra={"neighbors": KNN_K, "cache_policy": "none"},
-            ),
-        )
-
-
-@pytest.mark.parametrize(
-    ("operation", "method_args"),
-    (
-        (
-            "remove_statistical_outlier",
-            {"nb_neighbors": OUTLIER_NEIGHBORS, "std_ratio": 2.0},
+    output_points, extra = run_operation(
+        benchmark_runner,
+        o3d,
+        operation=operation,
+        library=library,
+        case=case,
+    )
+    attach_metadata(
+        benchmark_runner,
+        make_metadata(
+            library=library,
+            operation=operation,
+            case=case,
+            output_points=output_points,
+            comparable=True,
+            extra=extra,
         ),
-        ("remove_radius_outlier", {"nb_points": 2, "radius": RADIUS}),
-    ),
-)
-@pytest.mark.parametrize("library", ("pcl_rustic", "open3d"))
-def test_outlier_benchmark(
-    request: pytest.FixtureRequest,
-    benchmark_runner,
-    open3d_module,
-    library: str,
-    operation: str,
-    method_args: dict[str, Any],
-) -> None:
-    o3d = open3d_module
-    for case in comparison_cases(benchmark_mode(request)):
-        xyz, _expected_outliers = generate_outlier_xyz(case)
-        if library == "pcl_rustic":
-            if operation == "remove_statistical_outlier":
-                result = benchmark_fresh_input(
-                    benchmark_runner,
-                    lambda xyz=xyz: make_pcl_cloud(xyz),
-                    lambda cloud: cloud.remove_statistical_outlier(**method_args)[0],
-                )
-            else:
-                result = benchmark_fresh_input(
-                    benchmark_runner,
-                    lambda xyz=xyz: make_pcl_cloud(xyz),
-                    lambda cloud: cloud.remove_radius_outlier(**method_args)[0],
-                )
-            output_points = result.point_count()
-        else:
-            if operation == "remove_statistical_outlier":
-                result = benchmark_fresh_input(
-                    benchmark_runner,
-                    lambda xyz=xyz: make_open3d_cloud(o3d, xyz),
-                    lambda cloud: cloud.remove_statistical_outlier(**method_args)[0],
-                )
-            else:
-                result = benchmark_fresh_input(
-                    benchmark_runner,
-                    lambda xyz=xyz: make_open3d_cloud(o3d, xyz),
-                    lambda cloud: cloud.remove_radius_outlier(**method_args)[0],
-                )
-            output_points = len(result.points)
-        assert 0 < output_points <= case.point_count
-        attach_metadata(
-            benchmark_runner,
-            make_metadata(
-                library=library,
-                operation=operation,
-                case=case,
-                output_points=output_points,
-                comparable=True,
-                extra={**method_args, "cache_policy": "none"},
-            ),
-        )
+    )
 
 
-@pytest.mark.parametrize(
-    "operation",
-    ("registration_point_to_point", "registration_point_to_plane"),
-)
-@pytest.mark.parametrize("library", ("pcl_rustic", "open3d"))
-def test_registration_benchmark(
-    request: pytest.FixtureRequest,
-    benchmark_runner,
-    open3d_module,
-    library: str,
+def run_operation(
+    benchmark: Any,
+    o3d: Any,
+    *,
     operation: str,
-) -> None:
-    o3d = open3d_module
-    criteria = registration.ICPConvergenceCriteria(max_iteration=10)
-    for case in comparison_cases(benchmark_mode(request)):
-        limited_case = ComparisonCase(
-            mode=case.mode,
-            point_count=min(case.point_count, REGISTRATION_POINTS_CAP),
+    library: str,
+    case: ComparisonCase,
+) -> tuple[int, dict[str, Any]]:
+    if operation == "construction":
+        return run_construction(benchmark, o3d, library, case)
+    if operation == "transform":
+        return run_transform(benchmark, o3d, library, case)
+    if operation == "voxel_downsample":
+        return run_voxel_downsample(benchmark, o3d, library, case)
+    if operation in ("knn_warm", "radius_search_warm"):
+        return run_neighbors(benchmark, o3d, operation, library, case)
+    if operation == "estimate_normals":
+        return run_estimate_normals(benchmark, o3d, library, case)
+    if operation in ("remove_statistical_outlier", "remove_radius_outlier"):
+        return run_outliers(benchmark, o3d, operation, library, case)
+    if operation in ("registration_point_to_point", "registration_point_to_plane"):
+        return run_registration(benchmark, o3d, operation, library, case)
+    raise AssertionError(f"unhandled benchmark operation: {operation}")
+
+
+def run_construction(
+    benchmark: Any, o3d: Any, library: str, case: ComparisonCase
+) -> tuple[int, dict[str, Any]]:
+    xyz = generate_xyz(case)
+    if library == "pcl_rustic":
+        result = benchmark(lambda xyz=xyz: PointCloud.from_xyz(xyz))
+        np.testing.assert_allclose(result.get_xyz(), xyz, rtol=1e-6, atol=1e-6)
+        return result.point_count(), {"cache_policy": "none"}
+
+    result = benchmark(lambda xyz=xyz: make_open3d_cloud(o3d, xyz))
+    np.testing.assert_allclose(np.asarray(result.points), xyz, rtol=1e-6, atol=1e-6)
+    return len(result.points), {"cache_policy": "none"}
+
+
+def run_transform(
+    benchmark: Any, o3d: Any, library: str, case: ComparisonCase
+) -> tuple[int, dict[str, Any]]:
+    xyz = generate_xyz(case)
+    matrix = transform_matrix()
+    if library == "pcl_rustic":
+        result = benchmark_fresh_input(
+            benchmark,
+            lambda xyz=xyz: make_pcl_cloud(xyz),
+            lambda cloud: cloud.transform(matrix),
         )
-        source_xyz = generate_plane_xyz(limited_case)
-        target_xyz = source_xyz + np.array([0.05, -0.02, 0.01], dtype=np.float32)
-        init = np.eye(4, dtype=np.float32)
-        if library == "pcl_rustic":
-            source = make_pcl_cloud(source_xyz)
-            target = make_pcl_cloud(target_xyz)
-            if operation == "registration_point_to_plane":
-                target.estimate_normals(NormalSearch.knn(KNN_K))
-                estimation = registration.TransformationEstimation.point_to_plane()
-            else:
-                estimation = registration.TransformationEstimation.point_to_point()
-            result = benchmark_runner(
-                lambda source=source,
-                target=target,
-                estimation=estimation,
-                init=init,
-                criteria=criteria: registration.icp(
-                    source,
-                    target,
-                    0.5,
-                    init,
-                    estimation,
-                    criteria,
-                )
-            )
-            output_points = len(result.correspondence_set)
-        else:
-            source = make_open3d_cloud(o3d, source_xyz)
-            target = make_open3d_cloud(o3d, target_xyz)
-            if operation == "registration_point_to_plane":
-                target.estimate_normals(
-                    search_param=o3d.geometry.KDTreeSearchParamKNN(knn=KNN_K)
-                )
-                estimation = (
-                    o3d.pipelines.registration.TransformationEstimationPointToPlane()
-                )
-            else:
-                estimation = (
-                    o3d.pipelines.registration.TransformationEstimationPointToPoint()
-                )
-            criteria_o3d = o3d.pipelines.registration.ICPConvergenceCriteria(
-                max_iteration=10
-            )
-            result = benchmark_runner(
-                lambda source=source,
-                target=target,
-                estimation=estimation,
-                init=init,
-                criteria_o3d=criteria_o3d: (
-                    o3d.pipelines.registration.registration_icp(
-                        source,
-                        target,
-                        0.5,
-                        init.astype(np.float64),
-                        estimation,
-                        criteria_o3d,
-                    )
-                )
-            )
-            output_points = len(result.correspondence_set)
-        attach_metadata(
-            benchmark_runner,
-            make_metadata(
-                library=library,
-                operation=operation,
-                case=case,
-                output_points=output_points,
-                comparable=True,
-                extra={
-                    "estimator": operation.replace("registration_", ""),
-                    "cache_policy": "warm",
-                },
+        result_xyz = result.get_xyz()
+    else:
+
+        def transform_open3d(cloud):
+            cloud.transform(matrix.astype(np.float64))
+            return cloud
+
+        result = benchmark_fresh_input(
+            benchmark,
+            lambda xyz=xyz: make_open3d_cloud(o3d, xyz),
+            transform_open3d,
+        )
+        result_xyz = np.asarray(result.points)
+    assert_transform_equivalent(xyz, result_xyz)
+    return len(result_xyz), {"cache_policy": "none"}
+
+
+def run_voxel_downsample(
+    benchmark: Any, o3d: Any, library: str, case: ComparisonCase
+) -> tuple[int, dict[str, Any]]:
+    xyz = generate_xyz(case)
+    if library == "pcl_rustic":
+        result = benchmark_fresh_input(
+            benchmark,
+            lambda xyz=xyz: make_pcl_cloud(xyz),
+            lambda cloud: cloud.voxel_downsample(
+                VOXEL_SIZE,
+                DownsampleStrategy.NEAREST_TO_CENTROID,
             ),
         )
+        output_points = result.point_count()
+    else:
+        result = benchmark_fresh_input(
+            benchmark,
+            lambda xyz=xyz: make_open3d_cloud(o3d, xyz),
+            lambda cloud: cloud.voxel_down_sample(VOXEL_SIZE),
+        )
+        output_points = len(result.points)
+    assert 0 < output_points <= case.point_count
+    return output_points, {"voxel_size": VOXEL_SIZE, "cache_policy": "none"}
+
+
+def run_neighbors(
+    benchmark: Any,
+    o3d: Any,
+    operation: str,
+    library: str,
+    case: ComparisonCase,
+) -> tuple[int, dict[str, Any]]:
+    xyz = generate_xyz(case)
+    query = xyz[: min(64, len(xyz))]
+    if library == "pcl_rustic":
+        cloud = make_pcl_cloud(xyz)
+        if operation == "knn_warm":
+            cloud.knn(query[:1], KNN_K)
+            result = benchmark(lambda cloud=cloud, query=query: cloud.knn(query, KNN_K))
+            output_points = len(result[0])
+        else:
+            cloud.radius_search(query[:1], RADIUS)
+            result = benchmark(
+                lambda cloud=cloud, query=query: cloud.radius_search(query, RADIUS)
+            )
+            output_points = sum(len(indices) for indices in result)
+    else:
+        cloud = make_open3d_cloud(o3d, xyz)
+        tree = o3d.geometry.KDTreeFlann(cloud)
+        if operation == "knn_warm":
+
+            def run_knn(tree=tree, query=query):
+                return [
+                    tree.search_knn_vector_3d(point, KNN_K)[1] for point in query
+                ]
+
+            result = benchmark(run_knn)
+        else:
+
+            def run_radius(tree=tree, query=query):
+                return [
+                    tree.search_radius_vector_3d(point, RADIUS)[1] for point in query
+                ]
+
+            result = benchmark(run_radius)
+        output_points = sum(len(indices) for indices in result)
+    return output_points, {
+        "query_count": len(query),
+        "neighbors": KNN_K if operation == "knn_warm" else "",
+        "radius": RADIUS if operation == "radius_search_warm" else "",
+        "cache_policy": "warm",
+    }
+
+
+def run_estimate_normals(
+    benchmark: Any, o3d: Any, library: str, case: ComparisonCase
+) -> tuple[int, dict[str, Any]]:
+    xyz = generate_plane_xyz(case)
+    if library == "pcl_rustic":
+
+        def estimate(cloud: PointCloud):
+            cloud.estimate_normals(NormalSearch.knn(KNN_K))
+            return cloud
+
+        result = benchmark_fresh_input(
+            benchmark,
+            lambda xyz=xyz: make_pcl_cloud(xyz),
+            estimate,
+        )
+        output_points = result.point_count()
+    else:
+
+        def estimate_open3d(cloud):
+            cloud.estimate_normals(
+                search_param=o3d.geometry.KDTreeSearchParamKNN(knn=KNN_K)
+            )
+            return cloud
+
+        result = benchmark_fresh_input(
+            benchmark,
+            lambda xyz=xyz: make_open3d_cloud(o3d, xyz),
+            estimate_open3d,
+        )
+        output_points = len(result.points)
+    return output_points, {"neighbors": KNN_K, "cache_policy": "none"}
+
+
+def run_outliers(
+    benchmark: Any,
+    o3d: Any,
+    operation: str,
+    library: str,
+    case: ComparisonCase,
+) -> tuple[int, dict[str, Any]]:
+    xyz, _expected_outliers = generate_outlier_xyz(case)
+    method_args = (
+        {"nb_neighbors": OUTLIER_NEIGHBORS, "std_ratio": 2.0}
+        if operation == "remove_statistical_outlier"
+        else {"nb_points": 2, "radius": RADIUS}
+    )
+    if library == "pcl_rustic":
+        if operation == "remove_statistical_outlier":
+            result = benchmark_fresh_input(
+                benchmark,
+                lambda xyz=xyz: make_pcl_cloud(xyz),
+                lambda cloud: cloud.remove_statistical_outlier(**method_args)[0],
+            )
+        else:
+            result = benchmark_fresh_input(
+                benchmark,
+                lambda xyz=xyz: make_pcl_cloud(xyz),
+                lambda cloud: cloud.remove_radius_outlier(**method_args)[0],
+            )
+        output_points = result.point_count()
+    else:
+        if operation == "remove_statistical_outlier":
+            result = benchmark_fresh_input(
+                benchmark,
+                lambda xyz=xyz: make_open3d_cloud(o3d, xyz),
+                lambda cloud: cloud.remove_statistical_outlier(**method_args)[0],
+            )
+        else:
+            result = benchmark_fresh_input(
+                benchmark,
+                lambda xyz=xyz: make_open3d_cloud(o3d, xyz),
+                lambda cloud: cloud.remove_radius_outlier(**method_args)[0],
+            )
+        output_points = len(result.points)
+    assert 0 < output_points <= case.point_count
+    return output_points, {**method_args, "cache_policy": "none"}
+
+
+def run_registration(
+    benchmark: Any,
+    o3d: Any,
+    operation: str,
+    library: str,
+    case: ComparisonCase,
+) -> tuple[int, dict[str, Any]]:
+    limited_case = ComparisonCase(
+        mode=case.mode,
+        point_count=min(case.point_count, REGISTRATION_POINTS_CAP),
+    )
+    source_xyz = generate_plane_xyz(limited_case)
+    target_xyz = source_xyz + np.array([0.05, -0.02, 0.01], dtype=np.float32)
+    init = np.eye(4, dtype=np.float32)
+    if library == "pcl_rustic":
+        source = make_pcl_cloud(source_xyz)
+        target = make_pcl_cloud(target_xyz)
+        if operation == "registration_point_to_plane":
+            target.estimate_normals(NormalSearch.knn(KNN_K))
+            estimation = registration.TransformationEstimation.point_to_plane()
+        else:
+            estimation = registration.TransformationEstimation.point_to_point()
+        criteria = registration.ICPConvergenceCriteria(max_iteration=10)
+        result = benchmark(
+            lambda source=source,
+            target=target,
+            estimation=estimation,
+            init=init,
+            criteria=criteria: registration.icp(
+                source,
+                target,
+                0.5,
+                init,
+                estimation,
+                criteria,
+            )
+        )
+        output_points = len(result.correspondence_set)
+    else:
+        source = make_open3d_cloud(o3d, source_xyz)
+        target = make_open3d_cloud(o3d, target_xyz)
+        if operation == "registration_point_to_plane":
+            target.estimate_normals(
+                search_param=o3d.geometry.KDTreeSearchParamKNN(knn=KNN_K)
+            )
+            estimation = o3d.pipelines.registration.TransformationEstimationPointToPlane()
+        else:
+            estimation = o3d.pipelines.registration.TransformationEstimationPointToPoint()
+        criteria = o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=10)
+        result = benchmark(
+            lambda source=source,
+            target=target,
+            estimation=estimation,
+            init=init,
+            criteria=criteria: o3d.pipelines.registration.registration_icp(
+                source,
+                target,
+                0.5,
+                init.astype(np.float64),
+                estimation,
+                criteria,
+            )
+        )
+        output_points = len(result.correspondence_set)
+    return output_points, {
+        "estimator": operation.replace("registration_", ""),
+        "cache_policy": "warm",
+    }
