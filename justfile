@@ -37,6 +37,18 @@ benchmark-full: build
 benchmark-docs:
     uv run python tools/render_benchmark_docs.py
 
+benchmark-compare-smoke: build
+    uv run --group benchmark pytest tests/test_open3d_benchmark.py -v -s --run-slow --benchmark-mode=smoke --benchmark-json=reports/benchmarks/open3d-comparison-smoke.json --no-cov
+
+benchmark-compare-standard: build
+    uv run --group benchmark pytest tests/test_open3d_benchmark.py -v -s --run-slow --benchmark-mode=standard --benchmark-json=reports/benchmarks/open3d-comparison-standard.json --no-cov
+
+benchmark-compare-full: build
+    uv run --group benchmark pytest tests/test_open3d_benchmark.py -v -s --run-slow --benchmark-mode=full --benchmark-json=reports/benchmarks/open3d-comparison-full.json --no-cov
+
+benchmark-compare-charts:
+    uv run --group benchmark python tools/render_open3d_benchmark_charts.py
+
 # Run Rust tests
 test-rust:
     cargo test --release
