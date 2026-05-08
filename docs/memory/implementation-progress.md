@@ -1,8 +1,8 @@
-# Implementation Progress - RFC 0002-0013
+# Implementation Progress - RFC 0002-0014
 
-## Current Status: API Surface Broadly Present; Repo-Local And External Evidence Split
+## Current Status: Repo-Local RFCs Implemented; External Evidence Gates Remain
 
-Last updated: 2026-05-07.
+Last updated: 2026-05-08.
 
 This review used read-only subagent audits split across RFC-0002 through RFC-0005
 and RFC-0006 through RFC-0009, plus a local pass over source, tests, docs,
@@ -16,7 +16,10 @@ amend RFC-0004's repo-local GPU hot-path scope to device-preserving XYZ results
 with host-side planning and explicit external benchmark evidence gates.
 RFC-0013 was added and accepted on 2026-05-07 to require LAS 1.4 point format
 10 support with optional public attributes and precision-preserving standard
-dimensions.
+dimensions. RFC-0014 was added and accepted on 2026-05-08 to pin the explicit
+point format 10 export API and waveform metadata drop/reject policy. Commits
+`fda5273` and `7a46e3a` implement and test RFC-0013/RFC-0014; the worktree was
+clean after those commits.
 
 | RFC | Status | Summary |
 |---|---|---|
@@ -31,14 +34,16 @@ dimensions.
 | RFC-0010 Host Typed Attribute Storage Amendment | Accepted | Host typed attribute storage is documented as the accepted RFC-0002 storage model, with cross-RFC amendments for selection, GPU scope, outlier masks, and covariance storage. |
 | RFC-0011 Completion Evidence Gates | Accepted | RFC tracking now distinguishes repo-local gaps from external evidence gaps and forbids benchmark claims without recorded artifacts. |
 | RFC-0012 RFC-0004 Device Residency Scope | Accepted | RFC-0004 repo-local completion now requires source/common-device XYZ results for selection, concat, voxel downsample, and transforms, while measured GPU speedup remains external evidence. |
-| RFC-0013 LAS Point Format 10 Precision Support | Accepted | New LAS/LAZ I/O requirement for point format 10: optional standard attributes, uint16 RGB/NIR, waveform metadata/default behavior, raw coordinate precision sidecars, standard ExtraBytes handling, and uint64/int16 typed storage. |
+| RFC-0013 LAS Point Format 10 Precision Support | Implemented | LAS 1.4 point format 10 read/write, optional standard attributes, uint16 RGB/NIR, waveform metadata default/reject/drop behavior, raw coordinate precision sidecars, standard ExtraBytes collision handling, and uint64/int16 typed storage are implemented and tested. |
+| RFC-0014 LAS Point Format 10 Export API And Payload Policy | Implemented | Python/Rust-compatible `to_las` policy, `point_format=10`, `las_version`, `drop_waveform`, partial RGB defaults, version validation, unsupported format errors, and waveform metadata policy are implemented and tested. |
 
 ## Implemented Evidence
 
 ### RFC-0002 - API Reset & Typed Attributes
 
 - `src/point_cloud/attribute_value.rs` defines `AttributeValue` for `F32`,
-  `F64`, `U8`, `U16`, `U32`, `I32`, `I64`, `Bool`, plus `F32x6`.
+  `F64`, `U8`, `U16`, `U32`, `U64`, `I16`, `I32`, `I64`, `Bool`, plus
+  `F32x6`.
 - Intensity and RGB are standard attributes; `HighPerformancePointCloud` has
   `xyz`, `attributes`, and `kdtree_cache` rather than dedicated intensity/RGB
   tensor fields.
@@ -210,6 +215,34 @@ dimensions.
 - `tools/render_benchmark_docs.py` regenerates `docs/performance/benchmarks.md`
   from recorded CSV output without fabricating performance numbers.
 
+### RFC-0013 / RFC-0014 - LAS Point Format 10
+
+- `PointCloud.to_las(..., point_format=10, las_version="1.4")` explicitly
+  writes LAS 1.4 point format 10 while preserving existing inferred
+  `to_las(path, compress=False)` behavior for older formats.
+- Python stubs and bindings expose keyword-only `point_format`, `las_version`,
+  and `drop_waveform` options.
+- Point format 10 standard attributes are optional at the public API boundary;
+  missing GPS time, RGB, NIR, and waveform option groups are materialized as
+  LAS defaults during export.
+- Preferred precision dtypes are supported and tested: `uint16` intensity/RGB
+  /NIR, raw LAS 1.4 `int16` scan angle, `uint64` waveform offset, `uint32`
+  waveform size, `float32` waveform location/vector fields, and `float64`
+  GPS time.
+- Legacy `float32` intensity and `uint8` RGB remain accepted on write.
+- Non-default waveform point metadata is rejected unless `drop_waveform=True`;
+  drop mode writes no-waveform defaults and does not emit waveform attributes
+  as ExtraBytes.
+- Uncompressed LAS imports keep raw integer `X/Y/Z` sidecars plus scale/offset
+  metadata. Sidecars gather through selection and compatible concat, and are
+  dropped by coordinate-mutating operations.
+- Standard LAS ExtraBytes VLRs are decoded for supported scalar dtypes; names
+  colliding with point format 10 standard dimensions are prefixed with
+  `extra_`.
+- Tests cover Rust PF10 fixtures, a laspy-authored PF10 fixture, standard
+  ExtraBytes collision behavior, Python dtype propagation, version/format
+  validation, partial RGB defaults, and waveform policy.
+
 ## Important Gaps By RFC
 
 This section is the current implementation backlog. Per RFC-0011, repo-local
@@ -272,6 +305,22 @@ implementation.
 - Ongoing requirement: every future benchmark or external-evidence claim must
   cite an artifact with the RFC-0011 evidence fields.
 
+### RFC-0013
+
+- No repo-local implementation gap remains. LAS point format 10 read/write,
+  laspy fixture import, standard dimension dtype preservation, raw integer XYZ
+  sidecars, standard ExtraBytes parsing, waveform default/reject/drop behavior,
+  and docs/tests are complete.
+- Intentional limitation: full waveform descriptor/payload preservation is not
+  implemented. Non-default waveform point metadata is rejected unless callers
+  explicitly set `drop_waveform=True` to write no-waveform defaults.
+
+### RFC-0014
+
+- No repo-local implementation gap remains. The explicit `point_format=10`
+  export API policy is implemented with backward-compatible existing LAS calls,
+  version validation, partial RGB defaults, and waveform metadata policy tests.
+
 ## External Evidence Register
 
 | RFC | Criterion | Artifact | Date | Git SHA | Hardware / Dataset | Status | Notes |
@@ -279,11 +328,44 @@ implementation.
 | RFC-0002 | `multica-home/knowledge/projects/pcl-rustic.md` written | unrecorded | — | — | Multica workspace | open | Outside this repository. |
 | RFC-0002 | `just ci` green on Linux, macOS, Windows | unrecorded | — | — | Hosted CI matrix | open | Requires recorded cross-platform CI run. |
 | RFC-0002 | XYZ getter 10M-point benchmark evidence | unrecorded | — | — | Reference benchmark hardware | open | Performance artifact not recorded. |
-| RFC-0004 | 50M LAZ GPU-vs-CPU speedup | unrecorded | — | — | Reference GPU machine and LAZ fixture | open | GPU hot-path repo-local implementation is also incomplete. |
+| RFC-0004 | 50M LAZ GPU-vs-CPU speedup | unrecorded | — | — | Reference GPU machine and LAZ fixture | open | Repo-local device-residency behavior is implemented; measured GPU speedup artifact is absent. |
 | RFC-0005 | 10M-point kNN benchmark | unrecorded | — | — | Reference benchmark hardware | open | Repo-local neighbor API, KD-tree cache, octree pruning, and normal-estimation criteria are implemented. |
 | RFC-0006 | 10M-point SOR benchmark | unrecorded | — | — | Reference benchmark hardware | open | Repo-local SOR/ROR behavior and LAS standard/custom attribute propagation are implemented. |
 | RFC-0007 | Open3D Bunny comparison and 500k registration benchmark | unrecorded | — | — | Bundled Bunny fixture / reference CPU | open | Repo-local point-to-point, point-to-plane, and GICP solvers are implemented. |
 | RFC-0009 | Standard/full benchmark CSVs | unrecorded | — | — | High-memory benchmark hardware | open | Harness exists; measured artifacts are absent. |
+
+## 2026-05-08 LAS Point Format 10 Completion Pass
+
+- Added and accepted RFC-0014 to specify the point format 10 writer API and
+  waveform metadata policy.
+- Implemented typed host attributes for `uint64` and `int16` across NumPy
+  import/export, selection, concat, voxel averaging/mode behavior, and LAS
+  ExtraBytes.
+- Implemented explicit PF10 LAS export via
+  `to_las(path, compress=False, *, point_format=10, las_version="1.4",
+  drop_waveform=False)`, with Rust `to_las(path, compress)` kept as the
+  backward-compatible wrapper.
+- Implemented PF10 standard field read/write coverage for intensity, packed
+  return/classification flags, scan angle, point source/user fields, GPS time,
+  16-bit RGB, NIR, and waveform point metadata defaults.
+- Added raw LAS integer XYZ sidecars plus scale/offset metadata for uncompressed
+  LAS imports. Sidecars gather through selection and compatible concat, and are
+  dropped by coordinate-mutating operations.
+- Added LAS standard ExtraBytes VLR parsing for scalar dtypes needed by PF10,
+  including collision prefixing to `extra_...` when ExtraBytes names conflict
+  with canonical standard dimensions.
+- Added laspy as a dev dependency and introduced a laspy-authored PF10 fixture
+  test.
+- Updated `docs/api/io.md`, `docs/plans/rfc-0013...`, and
+  `docs/plans/rfc-0014...` to document and mark the PF10 work complete.
+
+Fresh verification from the 2026-05-08 PF10 completion pass:
+
+- `rtk cargo fmt --check` passed.
+- `rtk cargo clippy -- -D warnings` passed with no issues found.
+- `rtk cargo test --lib` passed: 40/40 Rust unit tests.
+- `rtk uv run pytest tests/test_point_cloud.py -q --no-cov` passed: 60/60
+  Python tests.
 
 ## 2026-05-04 Cleanup Pass
 
@@ -430,17 +512,16 @@ run manually then. CI installs `just` before invoking `just ci`.
 
 ## Next Implementation Priorities
 
-1. RFC-0004: implement tensor-native XYZ-heavy voxel binning, selection, concat,
-   and the CPU/GPU golden tests needed before claiming a GPU hot path.
-2. RFC-0007/RFC-0008: replace staged point-to-plane/GICP updates with actual
-   solvers, then add Open3D comparison and registration benchmark coverage.
-3. RFC-0002: implement the remaining XYZ getter optimization path and benchmark
-   evidence if getter performance remains a release criterion.
-4. RFC-0003: add a small reusable LAS fixture, run fixture-backed examples, and
-   cover remaining LAS selectors.
-5. RFC-0005/RFC-0006: add octree pruning, LAS ExtraBytes propagation, and the
-   required 10M kNN/SOR benchmark evidence.
-6. RFC-0009: run standard/full benchmark modes on recorded high-memory hardware
+1. RFC-0002: either produce the external Multica project note and
+   cross-platform `just ci` evidence, or explicitly move those artifacts out of
+   the repo-local release gate.
+2. RFC-0004/RFC-0009: run the recorded backend benchmark matrix and 50M LAZ
+   GPU-vs-CPU pipeline on reference hardware before making GPU speedup claims.
+3. RFC-0005/RFC-0006: run and publish the required 10M kNN and 10M SOR
+   benchmark artifacts on reference hardware.
+4. RFC-0007: record the Open3D Bunny comparison and 500k-vs-500k registration
+   benchmark artifacts.
+5. RFC-0009: run standard/full benchmark modes on recorded high-memory hardware
    and regenerate benchmark docs from the resulting CSV files.
 
 ## Architecture Decisions Recorded
@@ -452,3 +533,5 @@ run manually then. CI installs `just` before invoking `just ci`.
 | KD-tree falls back to brute-force on degenerate axis buckets | `kiddo` can panic on many identical values along an axis; fallback preserves correctness. |
 | GICP API staged behind covariance validation | Keeps RFC API usable while avoiding an unverified covariance-weighted solver. |
 | `just ci` no longer depends on pre-commit | CI should use pytest/cargo directly per user instruction; pre-commit remains separately available. |
+| LAS point format 10 waveform payloads are reject/drop only | Point-record waveform metadata references descriptor/payload data that is not preserved yet; non-default metadata errors unless `drop_waveform=True` writes no-waveform defaults. |
+| LAS raw integer XYZ sidecars are internal metadata | Compute XYZ stays `float32`, while unchanged uncompressed LAS imports preserve raw `X/Y/Z` plus scale/offset for precision round-trips. |
