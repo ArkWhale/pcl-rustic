@@ -16,6 +16,8 @@ SUMMARY_COLUMNS = [
     "comparison_status",
     "pcl_rustic_mean_s",
     "open3d_mean_s",
+    "pcl_rustic_stddev_s",
+    "open3d_stddev_s",
     "pcl_rustic_vs_open3d_speedup",
     "pcl_rustic_output_points",
     "open3d_output_points",
@@ -34,6 +36,7 @@ class BenchmarkRecord:
     case_id: str
     point_count: int
     mean_s: float
+    stddev_s: float
     output_points: int | None
     comparison_status: str
     not_comparable_reason: str
@@ -100,6 +103,7 @@ def _record_from_benchmark(path: Path, benchmark: dict[str, Any]) -> BenchmarkRe
         case_id=str(params.get("case_id", "")),
         point_count=_optional_int(params.get("point_count")) or 0,
         mean_s=float(stats.get("mean", 0.0)),
+        stddev_s=float(stats.get("stddev", 0.0)),
         output_points=_optional_int(params.get("output_points")),
         comparison_status=comparison_status,
         not_comparable_reason=str(params.get("not_comparable_reason", "")),
@@ -167,6 +171,8 @@ def _summary_row(records: list[BenchmarkRecord]) -> dict[str, str]:
         "comparison_status": status,
         "pcl_rustic_mean_s": _format_seconds(pcl.mean_s if pcl else None),
         "open3d_mean_s": _format_seconds(open3d.mean_s if open3d else None),
+        "pcl_rustic_stddev_s": _format_seconds(pcl.stddev_s if pcl else None),
+        "open3d_stddev_s": _format_seconds(open3d.stddev_s if open3d else None),
         "pcl_rustic_vs_open3d_speedup": speedup,
         "pcl_rustic_output_points": _format_optional_int(
             pcl.output_points if pcl else None
@@ -202,8 +208,7 @@ def write_summary_csv(path: Path, rows: list[dict[str, str]]) -> None:
 
 def write_plotly_html(path: Path, rows: list[dict[str, str]]) -> None:
     try:
-        import plotly.express as px
-        from plotly.subplots import make_subplots
+        import plotly.graph_objects as go
     except ImportError as exc:
         raise SystemExit(
             "Plotly is required for chart rendering. Install the benchmark dependency group."
@@ -218,69 +223,102 @@ def write_plotly_html(path: Path, rows: list[dict[str, str]]) -> None:
         )
         return
 
-    runtime_data = []
-    speedup_data = []
-    for row in comparable_rows:
-        for library, column in (
-            ("pcl_rustic", "pcl_rustic_mean_s"),
-            ("open3d", "open3d_mean_s"),
-        ):
-            runtime_data.append(
-                {
-                    "library": library,
-                    "operation": row["operation"],
-                    "point_count": int(row["point_count"]),
-                    "mean_s": float(row[column]),
-                    "case_id": row["case_id"],
-                    "git_sha": row["git_sha"],
-                    "source_json": row["source_json"],
-                }
-            )
-        speedup_data.append(
-            {
-                "operation": row["operation"],
-                "point_count": int(row["point_count"]),
-                "speedup": float(row["pcl_rustic_vs_open3d_speedup"]),
-                "case_id": row["case_id"],
-                "git_sha": row["git_sha"],
-                "source_json": row["source_json"],
-            }
-        )
-
-    runtime_fig = px.line(
-        runtime_data,
-        x="point_count",
-        y="mean_s",
-        color="library",
-        facet_col="operation",
-        markers=True,
-        hover_data=["case_id", "git_sha", "source_json"],
-        log_x=True,
-        log_y=True,
-        title="Runtime vs point count",
-    )
-    speedup_fig = px.line(
-        speedup_data,
-        x="point_count",
-        y="speedup",
-        color="operation",
-        markers=True,
-        hover_data=["case_id", "git_sha", "source_json"],
-        log_x=True,
-        title="pcl-rustic / Open3D speedup ratio",
-    )
-
-    # make_subplots import validates that Plotly's graphing stack is available.
-    _ = make_subplots
+    runtime_fig = build_runtime_error_bar_figure(comparable_rows, go)
     html = "\n".join(
         [
             "<html><body><h1>Open3D Comparison Benchmarks</h1>",
             runtime_fig.to_html(full_html=False, include_plotlyjs="cdn"),
-            speedup_fig.to_html(full_html=False, include_plotlyjs=False),
             "</body></html>",
         ]
     )
     path.write_text(html, encoding="utf-8")
+
+
+def build_runtime_error_bar_figure(rows: list[dict[str, str]], go_module: Any):
+    colors = {"pcl_rustic": "blue", "open3d": "red"}
+    symbols = (
+        "circle",
+        "square",
+        "diamond",
+        "cross",
+        "x",
+        "triangle-up",
+        "triangle-down",
+        "star",
+        "hexagon",
+        "pentagon",
+    )
+    operations = sorted({row["operation"] for row in rows})
+    symbol_by_operation = {
+        operation: symbols[index % len(symbols)]
+        for index, operation in enumerate(operations)
+    }
+    fig = go_module.Figure()
+    for operation in operations:
+        operation_rows = [row for row in rows if row["operation"] == operation]
+        for library in ("pcl_rustic", "open3d"):
+            mean_column = f"{library}_mean_s"
+            stddev_column = f"{library}_stddev_s"
+            library_rows = [
+                row for row in operation_rows if row.get(mean_column) not in ("", None)
+            ]
+            if not library_rows:
+                continue
+            library_rows.sort(key=lambda row: int(row["point_count"]))
+            fig.add_trace(
+                go_module.Scatter(
+                    x=[int(row["point_count"]) for row in library_rows],
+                    y=[float(row[mean_column]) for row in library_rows],
+                    mode="markers",
+                    name=f"{operation} / {library}",
+                    legendgroup=library,
+                    marker={
+                        "color": colors[library],
+                        "symbol": symbol_by_operation[operation],
+                        "size": 9,
+                    },
+                    error_y={
+                        "type": "data",
+                        "array": [
+                            max(0.0, float(row.get(stddev_column) or 0.0))
+                            for row in library_rows
+                        ],
+                        "visible": True,
+                        "color": colors[library],
+                        "thickness": 1.5,
+                        "width": 3,
+                    },
+                    customdata=[
+                        [row["case_id"], row["git_sha"], row["source_json"]]
+                        for row in library_rows
+                    ],
+                    hovertemplate=(
+                        "operation=%{meta}<br>"
+                        f"library={library}<br>"
+                        "point_count=%{x}<br>"
+                        "mean_s=%{y:.6f}<br>"
+                        "case_id=%{customdata[0]}<br>"
+                        "git_sha=%{customdata[1]}<br>"
+                        "source_json=%{customdata[2]}<extra></extra>"
+                    ),
+                    meta=operation,
+                )
+            )
+
+    fig.update_layout(
+        title="Runtime vs point count with pytest-benchmark error bars",
+        xaxis_title="point_count",
+        yaxis_title="mean_s",
+        legend_title="operation / library",
+    )
+    fig.update_xaxes(
+        type="log",
+        tickmode="array",
+        tickvals=list(range(1000, 10001, 1000)),
+        ticktext=[str(value) for value in range(1000, 10001, 1000)],
+    )
+    fig.update_yaxes(type="log")
+    return fig
 
 
 def discover_json_paths(json_dir: Path) -> list[Path]:

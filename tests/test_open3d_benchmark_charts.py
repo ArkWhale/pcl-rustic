@@ -4,10 +4,13 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from tools.render_open3d_benchmark_charts import (
+    build_runtime_error_bar_figure,
     build_summary_rows,
     read_benchmark_records,
     write_summary_csv,
@@ -34,7 +37,12 @@ def _write_pytest_benchmark_json(path: Path) -> None:
                     "open3d_version": "0.19.0",
                     "pcl_rustic_version": "0.1.0",
                 },
-                "stats": {"mean": 0.01, "min": 0.009, "max": 0.012},
+                "stats": {
+                    "mean": 0.01,
+                    "min": 0.009,
+                    "max": 0.012,
+                    "stddev": 0.001,
+                },
             },
             {
                 "name": "open3d__voxel_downsample__smoke__N1000",
@@ -51,7 +59,12 @@ def _write_pytest_benchmark_json(path: Path) -> None:
                     "open3d_version": "0.19.0",
                     "pcl_rustic_version": "0.1.0",
                 },
-                "stats": {"mean": 0.025, "min": 0.023, "max": 0.03},
+                "stats": {
+                    "mean": 0.025,
+                    "min": 0.023,
+                    "max": 0.03,
+                    "stddev": 0.002,
+                },
             },
             {
                 "name": "pcl_rustic__transform__smoke__N1000",
@@ -125,6 +138,8 @@ def test_summary_rows_include_speedup_and_exclusions(tmp_path: Path) -> None:
     assert comparable["comparison_status"] == "comparable"
     assert comparable["pcl_rustic_mean_s"] == "0.010000"
     assert comparable["open3d_mean_s"] == "0.025000"
+    assert comparable["pcl_rustic_stddev_s"] == "0.001000"
+    assert comparable["open3d_stddev_s"] == "0.002000"
     assert comparable["pcl_rustic_vs_open3d_speedup"] == "2.500000"
 
     exclusion = next(row for row in rows if row["operation"] == "typed_concat")
@@ -141,5 +156,29 @@ def test_writes_summary_csv(tmp_path: Path) -> None:
 
     text = csv_path.read_text(encoding="utf-8")
     assert "pcl_rustic_vs_open3d_speedup" in text
+    assert "pcl_rustic_stddev_s" in text
     assert "voxel_downsample" in text
     assert "typed_concat" in text
+
+
+def test_runtime_chart_uses_shared_error_bar_axes(tmp_path: Path) -> None:
+    plotly = pytest.importorskip("plotly.graph_objects")
+    json_path = tmp_path / "open3d-comparison-smoke.json"
+    _write_pytest_benchmark_json(json_path)
+    rows = build_summary_rows(read_benchmark_records([json_path]))
+
+    figure = build_runtime_error_bar_figure(
+        [row for row in rows if row["comparison_status"] == "comparable"],
+        plotly,
+    )
+
+    assert len(figure.data) == 3
+    assert figure.layout.xaxis.type == "log"
+    assert figure.layout.xaxis.tickvals == tuple(range(1000, 10001, 1000))
+    assert figure.layout.yaxis.type == "log"
+    voxel_traces = [
+        trace for trace in figure.data if trace.name.startswith("voxel_downsample")
+    ]
+    assert {trace.marker.color for trace in voxel_traces} == {"blue", "red"}
+    assert all(trace.error_y.visible for trace in voxel_traces)
+    assert all(trace.error_y.array for trace in voxel_traces)
