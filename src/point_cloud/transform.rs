@@ -1,8 +1,7 @@
 use crate::point_cloud::core::HighPerformancePointCloud;
 use crate::utils::error::Result;
 use crate::utils::tensor;
-use crate::utils::tensor::Backend;
-use burn::tensor::{Tensor, TensorData};
+use burn::tensor::Tensor;
 
 impl HighPerformancePointCloud {
     pub fn transform(&self, matrix: &[[f32; 4]; 4]) -> Result<Self> {
@@ -18,8 +17,8 @@ impl HighPerformancePointCloud {
         let n = self.point_count();
 
         // Build homogeneous coordinates [N, 4]
-        let ones_data = TensorData::from(vec![1.0f32; n].as_slice());
-        let ones = Tensor::<Backend, 1>::from_data(ones_data, &device).reshape([n, 1]);
+        let ones_data = vec![1.0f32; n];
+        let ones = tensor::tensor1_from_slice_on_device(&ones_data, &device).reshape([n, 1]);
         let homo = Tensor::cat(vec![xyz, ones], 1); // [N, 4]
         let transformed = homo.matmul(mat_t); // [N, 4]
 
@@ -55,9 +54,7 @@ impl HighPerformancePointCloud {
             return Ok(self.clone());
         }
         let device = self.xyz_device();
-        let translation_data = TensorData::from(t.as_slice());
-        let translation_tensor =
-            Tensor::<Backend, 1>::from_data(translation_data, &device).reshape([1, 3]);
+        let translation_tensor = tensor::tensor1_from_slice_on_device(&t, &device).reshape([1, 3]);
 
         let mut result = self.clone();
         let new_xyz = self.xyz_ref().clone() + translation_tensor;
@@ -71,8 +68,7 @@ impl HighPerformancePointCloud {
         }
         let device = self.xyz_device();
         let center = center.unwrap_or_else(|| self.compute_centroid_xyz());
-        let center_data = TensorData::from(center.as_slice());
-        let center_tensor = Tensor::<Backend, 1>::from_data(center_data, &device).reshape([1, 3]);
+        let center_tensor = tensor::tensor1_from_slice_on_device(&center, &device).reshape([1, 3]);
 
         let xyz = self.xyz_ref().clone();
         let centered = xyz - center_tensor.clone();
@@ -90,8 +86,7 @@ impl HighPerformancePointCloud {
         }
         let device = self.xyz_device();
         let center = center.unwrap_or_else(|| self.compute_centroid_xyz());
-        let center_data = TensorData::from(center.as_slice());
-        let center_tensor = Tensor::<Backend, 1>::from_data(center_data, &device).reshape([1, 3]);
+        let center_tensor = tensor::tensor1_from_slice_on_device(&center, &device).reshape([1, 3]);
 
         let flat: Vec<f32> = r.iter().flat_map(|row| row.iter().copied()).collect();
         let rot_tensor = tensor::tensor2_from_slice_on_device(&flat, 3, 3, &device)?;
@@ -119,9 +114,8 @@ impl HighPerformancePointCloud {
         let rot_tensor = tensor::tensor2_from_slice_on_device(&flat, 3, 3, &device)?;
         let rot_t = rot_tensor.transpose();
 
-        let translation_data = TensorData::from(translation.as_slice());
         let translation_tensor =
-            Tensor::<Backend, 1>::from_data(translation_data, &device).reshape([1, 3]);
+            tensor::tensor1_from_slice_on_device(&translation, &device).reshape([1, 3]);
 
         let xyz = self.xyz_ref().clone();
         let rotated = xyz.matmul(rot_t);

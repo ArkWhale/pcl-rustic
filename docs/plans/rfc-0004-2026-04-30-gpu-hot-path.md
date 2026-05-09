@@ -1,14 +1,21 @@
 # RFC-0004: GPU Hot-Path Rewrite (M3)
 
-- **Status:** Implemented (external evidence open, amended by RFC-0010/RFC-0012)
+- **Status:** Implemented (external evidence open, amended by RFC-0010/RFC-0012/RFC-0016)
 - **Date:** 2026-04-30
 - **Author:** Master PM (agent)
 - **Tracking issue:** LEO-36 (parent), per-milestone LEO issue TBD
-- **Related:** RFC-0002 (prerequisite: typed attrs), RFC-0003 (prerequisite: `select(mask)` primitive), RFC-0010 (host typed attribute storage amendment), RFC-0012 (device residency scope amendment)
+- **Related:** RFC-0002 (prerequisite: typed attrs), RFC-0003 (prerequisite: `select(mask)` primitive), RFC-0010 (host typed attribute storage amendment), RFC-0012 (device residency scope amendment), RFC-0016 (Burn Dispatch backend amendment)
 
 ## 1. Summary
 
-Close LEO-36 priority #1 by making the Burn `Router<(Wgpu, NdArray)>` backend carry real load. Today only `transform()` runs on the tensor device; voxel binning and XYZ gather/concatenate still round-trip through host data. M3 rewrites XYZ-heavy voxel downsample as tensor-native work where practical and publishes a GPU-vs-CPU benchmark matrix that replaces the current CPU-only README table. RFC-0010 keeps typed attributes host-side, so this RFC must not require all attribute gather/cat paths to remain on device.
+Close LEO-36 priority #1 by making Burn-backed GPU tensors carry real load.
+RFC-0016 amends the backend adapter from `Router<(Wgpu, NdArray)>` to Dispatch.
+Today only `transform()` runs on the tensor device; voxel binning and XYZ
+gather/concatenate still round-trip through host data. M3 rewrites XYZ-heavy
+voxel downsample as tensor-native work where practical and publishes a
+GPU-vs-CPU benchmark matrix that replaces the current CPU-only README table.
+RFC-0010 keeps typed attributes host-side, so this RFC must not require all
+attribute gather/cat paths to remain on device.
 
 ## 2. Motivation
 

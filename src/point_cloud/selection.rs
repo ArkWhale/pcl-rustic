@@ -487,7 +487,7 @@ mod tests {
             .to_device(tensor::cpu_device());
         let gpu = HighPerformancePointCloud::from_xyz_vec(vec![[1.0, 0.0, 0.0]])
             .unwrap()
-            .to_device(tensor::gpu_device());
+            .to_device(tensor::gpu_device().unwrap());
 
         let err = match HighPerformancePointCloud::concatenate(&[&cpu, &gpu], ConcatPolicy::Strict)
         {

@@ -1,6 +1,6 @@
 # RFC-0016: Burn Dispatch Backend Migration
 
-- **Status:** Accepted
+- **Status:** Implemented
 - **Date:** 2026-05-09
 - **Author:** Codex
 - **Related:** RFC-0004, RFC-0009, RFC-0011, RFC-0012
@@ -45,7 +45,7 @@ boundary explicit.
 ### 3.1 Burn Upgrade
 
 Update Burn dependencies from `0.20.1` to a compatible stable release that
-contains `burn::backend::{Dispatch, DispatchDevice}`. Burn `0.21.0` and
+contains `burn::{Dispatch, DispatchDevice}`. Burn `0.21.0` and
 `burn-dispatch 0.21.0` are available in the public registry and are the initial
 target.
 
@@ -144,33 +144,33 @@ runtime backend abstraction with Dispatch. On implementation, update:
 
 ## 4. Acceptance Criteria
 
-- [ ] Burn is upgraded to `0.21.0` or a later compatible stable release that
+- [x] Burn is upgraded to `0.21.0` or a later compatible stable release that
       includes Dispatch backend support.
-- [ ] Cargo features enable `dispatch` plus exactly one WGPU target feature
+- [x] Cargo features enable `dispatch` plus exactly one WGPU target feature
       (`vulkan`, `metal`, or `webgpu`) and remove `router`.
-- [ ] `src/utils/tensor.rs` uses Dispatch aliases and Dispatch devices instead
+- [x] `src/utils/tensor.rs` uses Dispatch aliases and Dispatch devices instead
       of `Router<(Wgpu, NdArray)>` and router `MultiDevice`.
-- [ ] `default_device()` remains GPU-first and does not force CPU for
+- [x] `default_device()` remains GPU-first and does not force CPU for
       RFC-0009 benchmark modes.
-- [ ] `gpu_device()` returns `Result<BackendDevice>` and `.to("gpu")` surfaces a
+- [x] `gpu_device()` returns `Result<BackendDevice>` and `.to("gpu")` surfaces a
       clean Python error when no GPU exists.
-- [ ] No non-adapter module imports Router, Dispatch, Wgpu backend, or NdArray
+- [x] No non-adapter module imports Router, Dispatch, Wgpu backend, or NdArray
       backend types directly.
-- [ ] No non-adapter module constructs `Tensor<Backend, D>` directly; helper
+- [x] No non-adapter module constructs `Tensor<Backend, D>` directly; helper
       tensor construction goes through `src/utils/tensor.rs`.
-- [ ] Existing device-preservation tests for selection, concat, voxel
+- [x] Existing device-preservation tests for selection, concat, voxel
       downsample, and transforms continue to pass.
-- [ ] Device edge cases remain covered: source-derived empty selections preserve
+- [x] Device edge cases remain covered: source-derived empty selections preserve
       the source device, all-empty concat preserves the common source device,
       no-input concat returns a valid CPU empty cloud, and zero-size resources do
       not force GPU allocation failures.
-- [ ] RFC-0009 benchmark harness does not set `PCL_RUSTIC_DEFAULT_DEVICE` or
+- [x] RFC-0009 benchmark harness does not set `PCL_RUSTIC_DEFAULT_DEVICE` or
       any equivalent CPU-forcing environment variable.
-- [ ] GPU benchmark evidence is accepted only when benchmark rows record a
+- [x] GPU benchmark evidence is accepted only when benchmark rows record a
       Dispatch GPU device name.
-- [ ] RFC/backend references and `docs/memory/implementation-progress.md` are
+- [x] RFC/backend references and `docs/memory/implementation-progress.md` are
       updated to reflect Dispatch as the accepted backend adapter.
-- [ ] The implementation documents any remaining WGPU single-buffer limitation
+- [x] The implementation documents any remaining WGPU single-buffer limitation
       as an unresolved GPU allocation problem, not as a CPU fallback policy.
 
 ## 5. Verification
@@ -208,9 +208,9 @@ before final commit.
   `.to("gpu")`, `device()`, and `has_wgpu_device()`.
 - Adding CUDA, ROCm, or other non-WGPU backends.
 
-## 8. Open Questions
+## 8. Remaining Limitations
 
-- Does Dispatch expose a stable CPU device constructor suitable for tests, or
-  should CPU tests use the high-level device API expected by PR #4717?
 - If Dispatch still hits WGPU buffer limits, should RFC-0009 full mode move to
-  chunked GPU concatenation or split benchmark rows by chunk size?
+  chunked GPU concatenation or split benchmark rows by chunk size? This remains
+  unresolved GPU allocation work and must not be treated as a reason to force
+  RFC-0009 `standard` or `full` runs onto CPU.

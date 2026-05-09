@@ -1,8 +1,8 @@
-# Implementation Progress - RFC 0002-0015
+# Implementation Progress - RFC 0002-0016
 
 ## Current Status: Repo-Local RFCs Implemented; External Evidence Gates Remain
 
-Last updated: 2026-05-08.
+Last updated: 2026-05-09.
 
 This review used read-only subagent audits split across RFC-0002 through RFC-0005
 and RFC-0006 through RFC-0009, plus a local pass over source, tests, docs,
@@ -25,13 +25,16 @@ commit `5cb3284`, and left only the RFC-0011 external evidence gates open.
 RFC-0015 was drafted and implemented on 2026-05-08 to add pytest-benchmark
 based Open3D comparison benchmarks and Plotly chart rendering from recorded
 benchmark artifacts. Measured Open3D comparison results remain external
-evidence until generated and recorded under RFC-0011 rules.
+evidence until generated and recorded under RFC-0011 rules. RFC-0016 was added
+and accepted on 2026-05-09 to migrate the tensor backend adapter from Burn
+Router to Burn Dispatch while preserving GPU-first behavior and preparing for
+Burn's planned backend-parameter removal.
 
 | RFC | Status | Summary |
 |---|---|---|
 | RFC-0002 API Reset & Typed Attributes | Partial (external evidence open), amended by RFC-0010/RFC-0011 | Typed attributes, host typed storage, dtype-preserving typed getters, and new downsample strategies exist; external Multica docs, cross-platform CI evidence, and XYZ getter benchmark evidence remain open. |
 | RFC-0003 Coordinate Ops & Selection | Implemented | Selection, generic attribute filters, AABB/OBB crop, concat, transform wrappers, LAS fixture-backed selector coverage, fixture-backed examples, and LAS standard-attribute round-trip coverage exist. |
-| RFC-0004 GPU Hot Path | Implemented (external evidence open), amended by RFC-0010/RFC-0012 | Device transfer hooks exist; selection, concat, voxel downsample, and transforms now preserve source/common XYZ device with host-side planning; 50M speedup and backend benchmark artifacts remain open. |
+| RFC-0004 GPU Hot Path | Implemented (external evidence open), amended by RFC-0010/RFC-0012/RFC-0016 | Device transfer hooks exist; selection, concat, voxel downsample, and transforms now preserve source/common XYZ device with host-side planning; 50M speedup and backend benchmark artifacts remain open. |
 | RFC-0005 KD-tree, Octree, Normals | Implemented (external evidence open) | KD-tree, fallback, octree cell-pruned range search, Python APIs, normals, covariance support, 10k brute-force oracle tests, 10k plane-normal coverage, and KD-tree cache behavior tests exist; 10M benchmark evidence remains open. |
 | RFC-0006 Outlier Removal | Implemented (external evidence open), amended by RFC-0010/RFC-0011 | SOR/ROR APIs, host masks, docs, synthetic acceptance tests, typed attribute propagation, LAS standard-attribute propagation, and custom ExtraBytes propagation coverage exist; 10M benchmark evidence remains open. |
 | RFC-0007 ICP/GICP Registration | Implemented (external evidence open) | Registration API, point-to-point ICP, point-to-plane update, covariance-weighted GICP update, evaluate, covariance storage, and prerequisite validation exist; Open3D comparison and 500k benchmark evidence remain open. |
@@ -43,6 +46,7 @@ evidence until generated and recorded under RFC-0011 rules.
 | RFC-0013 LAS Point Format 10 Precision Support | Implemented | LAS 1.4 point format 10 read/write, optional standard attributes, uint16 RGB/NIR, waveform metadata default/reject/drop behavior, raw coordinate precision sidecars, standard ExtraBytes collision handling, and uint64/int16 typed storage are implemented and tested. |
 | RFC-0014 LAS Point Format 10 Export API And Payload Policy | Implemented | Python/Rust-compatible `to_las` policy, `point_format=10`, `las_version`, `drop_waveform`, partial RGB defaults, version validation, unsupported format errors, and waveform metadata policy are implemented and tested. |
 | RFC-0015 Open3D Comparison Benchmark Charts | Implemented (external evidence open) | pytest-benchmark based pcl-rustic/Open3D comparison harness, optional benchmark dependency group, just recipes, parser tests, and Plotly chart renderer exist; measured comparison artifacts remain unrecorded. |
+| RFC-0016 Burn Dispatch Backend Migration | Implemented | Burn 0.21 Dispatch backend is configured with explicit `dispatch` + `vulkan` features, Router is removed, tensor construction helpers are centralized in `src/utils/tensor.rs`, and `.to("gpu")` now reports unavailable GPU as a Python error. |
 
 ## Implemented Evidence
 
@@ -109,7 +113,12 @@ evidence until generated and recorded under RFC-0011 rules.
   - Python `pc.device()`
 - Added Python `has_wgpu_device()` so GPU residency tests can skip explicitly
   when no WGPU adapter is available.
-- Burn Router backend is configured with WGPU and CPU support.
+- Burn Dispatch backend is configured with explicit `dispatch`, `vulkan`,
+  `cpu`, and `ndarray` features; Router is removed per RFC-0016.
+- `src/utils/tensor.rs` owns backend/device aliases and tensor construction
+  helpers, keeping Dispatch-specific code out of feature modules.
+- `.to("gpu")` surfaces a Python error when no WGPU device is available rather
+  than silently falling back to CPU.
 - RFC-0012 accepts host-side planning for the repo-local implementation while
   requiring derived XYZ tensors to preserve the source/common device.
 - Implemented source/common-device XYZ result preservation for:

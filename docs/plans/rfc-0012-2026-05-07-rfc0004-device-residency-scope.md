@@ -18,8 +18,9 @@ under RFC-0011 until a recorded benchmark artifact exists.
 
 RFC-0004 originally described a fully tensor-native voxel pipeline using
 argsort, segmented reductions, and device-side gathers. The current codebase
-uses Burn `Router<(Wgpu, NdArray)>` for XYZ storage and math, while typed LAS
-attributes are host `Vec<T>` values per RFC-0010. Burn 0.20 does not provide a
+uses Burn-backed tensors for XYZ storage and math, while typed LAS attributes
+are host `Vec<T>` values per RFC-0010. RFC-0016 migrates the backend adapter
+from Router to Dispatch. Burn 0.20 did not provide a
 small, stable point-cloud segment-reduction abstraction in this repo that can
 replace the existing deterministic CPU grouping without a custom kernel effort.
 

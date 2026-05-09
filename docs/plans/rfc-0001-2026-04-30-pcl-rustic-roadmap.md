@@ -19,7 +19,10 @@ Open3D covers our use cases but:
 2. Its Python legacy API is CPU-only; the tensor API has CUDA but no AMD/Intel GPU path and no clean Rust extension story.
 3. We need a home where Rust-first batch ops and LAS semantics live together, without C++ build overhead on Linux/macOS/Windows wheels.
 
-pcl-rustic already has the right foundation (PyO3 + Burn `Router<(Wgpu, NdArray)>` + `maturin` wheel CI across Python 3.10–3.14t and all major OS/arch combos). What is missing is feature breadth and honest GPU utilization on the hot paths.
+pcl-rustic already has the right foundation (PyO3 + Burn Dispatch backend per
+RFC-0016 + `maturin` wheel CI across Python 3.10–3.14t and all major OS/arch
+combos). What is missing is feature breadth and honest GPU utilization on the
+hot paths.
 
 ## 3. Scope
 
@@ -67,7 +70,11 @@ This is **already** the project's setup; RFC-0001 codifies it as a non-negotiabl
 
 ### 5.2 Tensor backend
 
-Burn `Router<(Wgpu, NdArray)>` stays. WGPU is our GPU target (portable across NVIDIA/AMD/Intel/Apple Silicon) and ndarray is the CPU fallback. No CUDA-only paths. Backend selection is runtime-auto with explicit `gpu_device()` / `cpu_device()` escape hatches (see `src/utils/tensor.rs`).
+Burn Dispatch is the backend adapter per RFC-0016. WGPU/Vulkan is the default
+Linux GPU target, with platform-specific `metal` or `webgpu` targets allowed by
+feature selection. CPU remains an explicit fallback only when no GPU exists or
+when the caller requests `cpu_device()` / `.to("cpu")`; high-scale benchmark
+failures must not be solved by forcing CPU execution.
 
 ### 5.3 Attribute typing
 

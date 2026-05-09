@@ -579,7 +579,7 @@ impl PyPointCloud {
     fn to(&self, device: &str) -> PyResult<Self> {
         let device = match device {
             "cpu" => crate::utils::tensor::cpu_device(),
-            "gpu" => crate::utils::tensor::gpu_device(),
+            "gpu" => crate::utils::tensor::gpu_device().map_err(PyErr::from)?,
             _ => {
                 return Err(pyo3::exceptions::PyValueError::new_err(
                     "device must be 'cpu' or 'gpu'",
