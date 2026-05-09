@@ -1,4 +1,4 @@
-# Implementation Progress - RFC 0002-0016
+# Implementation Progress - RFC 0002-0018
 
 ## Current Status: Repo-Local RFCs Implemented; External Evidence Gates Remain
 
@@ -28,7 +28,10 @@ benchmark artifacts. Measured Open3D comparison results remain external
 evidence until generated and recorded under RFC-0011 rules. RFC-0016 was added
 and accepted on 2026-05-09 to migrate the tensor backend adapter from Burn
 Router to Burn Dispatch while preserving GPU-first behavior and preparing for
-Burn's planned backend-parameter removal.
+Burn's planned backend-parameter removal. RFC-0017 was accepted and then
+superseded before implementation by RFC-0018. RFC-0018 amends RFC-0016 to avoid
+WGPU/Vulkan for large tensor workloads and use non-WGPU Dispatch backends,
+starting with CUDA on Linux plus CPU fallback.
 
 | RFC | Status | Summary |
 |---|---|---|
@@ -46,7 +49,9 @@ Burn's planned backend-parameter removal.
 | RFC-0013 LAS Point Format 10 Precision Support | Implemented | LAS 1.4 point format 10 read/write, optional standard attributes, uint16 RGB/NIR, waveform metadata default/reject/drop behavior, raw coordinate precision sidecars, standard ExtraBytes collision handling, and uint64/int16 typed storage are implemented and tested. |
 | RFC-0014 LAS Point Format 10 Export API And Payload Policy | Implemented | Python/Rust-compatible `to_las` policy, `point_format=10`, `las_version`, `drop_waveform`, partial RGB defaults, version validation, unsupported format errors, and waveform metadata policy are implemented and tested. |
 | RFC-0015 Open3D Comparison Benchmark Charts | Implemented (external evidence open) | pytest-benchmark based pcl-rustic/Open3D comparison harness, optional benchmark dependency group, just recipes, parser tests, and Plotly chart renderer exist; measured comparison artifacts remain unrecorded. |
-| RFC-0016 Burn Dispatch Backend Migration | Implemented | Burn 0.21 Dispatch backend is configured with explicit `dispatch` + `vulkan` features, Router is removed, tensor construction helpers are centralized in `src/utils/tensor.rs`, and `.to("gpu")` now reports unavailable GPU as a Python error. |
+| RFC-0016 Burn Dispatch Backend Migration | Implemented, amended by RFC-0018 | Burn 0.21 Dispatch backend is configured, Router is removed, tensor construction helpers are centralized in `src/utils/tensor.rs`, and `.to("gpu")` now reports unavailable GPU as a Python error. |
+| RFC-0017 GPU Benchmark Allocation Preflight | Superseded by RFC-0018 | WGPU allocation preflight was not implemented; RFC-0018 replaces it by removing WGPU/Vulkan from the default large-tensor backend path. |
+| RFC-0018 Non-WGPU Dispatch Backend Selection | Implemented | Default Linux backend features use Burn Dispatch CUDA + CPU, not WGPU/Vulkan; RFC-0009 smoke rows must record the actual backend before supporting any benchmark claim. |
 
 ## Implemented Evidence
 
@@ -111,14 +116,15 @@ Burn's planned backend-parameter removal.
   - Rust `HighPerformancePointCloud::to_device(...)`
   - Python `pc.to("cpu" | "gpu")`
   - Python `pc.device()`
-- Added Python `has_wgpu_device()` so GPU residency tests can skip explicitly
-  when no WGPU adapter is available.
-- Burn Dispatch backend is configured with explicit `dispatch`, `vulkan`,
-  `cpu`, and `ndarray` features; Router is removed per RFC-0016.
+- Added Python `has_wgpu_device()` before RFC-0018; it now behaves as a
+  compatibility accelerator-availability check until a rename RFC replaces it.
+- Burn Dispatch backend is configured with explicit `dispatch`, `cuda`, and
+  `cpu` features; Router and WGPU/Vulkan default features are removed per
+  RFC-0018.
 - `src/utils/tensor.rs` owns backend/device aliases and tensor construction
   helpers, keeping Dispatch-specific code out of feature modules.
-- `.to("gpu")` surfaces a Python error when no WGPU device is available rather
-  than silently falling back to CPU.
+- `.to("gpu")` surfaces a Python error when no configured accelerator is
+  available rather than silently falling back to CPU.
 - RFC-0012 accepts host-side planning for the repo-local implementation while
   requiring derived XYZ tensors to preserve the source/common device.
 - Implemented source/common-device XYZ result preservation for:

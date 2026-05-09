@@ -1,6 +1,6 @@
 # RFC-0018: Non-WGPU Dispatch Backend Selection
 
-- **Status:** Accepted
+- **Status:** Implemented
 - **Date:** 2026-05-09
 - **Author:** Codex
 - **Related:** RFC-0009, RFC-0011, RFC-0016, RFC-0017
@@ -115,25 +115,25 @@ self-contradictory.
 
 ## 4. Acceptance Criteria
 
-- [ ] Default Linux Cargo features use Burn Dispatch with `cuda` and `cpu`,
+- [x] Default Linux Cargo features use Burn Dispatch with `cuda` and `cpu`,
       not `vulkan`, `wgpu`, `metal`, `webgpu`, or `ndarray`.
-- [ ] `src/utils/tensor.rs` constructs `DispatchDevice::Cuda` for the default
+- [x] `src/utils/tensor.rs` constructs `DispatchDevice::Cuda` for the default
       accelerator when CUDA is compiled in and a smoke check passes.
-- [ ] Accelerator selection does not use `DispatchDevice::default()`.
-- [ ] The CUDA smoke check covers host upload, reshape, a simple op, sync, and
+- [x] Accelerator selection does not use `DispatchDevice::default()`.
+- [x] The CUDA smoke check covers host upload, reshape, a simple op, sync, and
       host readback.
-- [ ] CPU fallback is used only when no configured accelerator smoke check
+- [x] CPU fallback is used only when no configured accelerator smoke check
       passes or the caller explicitly requests CPU.
-- [ ] Public `.to("gpu")` maps to the selected accelerator and returns a Python
+- [x] Public `.to("gpu")` maps to the selected accelerator and returns a Python
       error when no accelerator exists.
-- [ ] RFC-0009 smoke benchmark rows record a non-WGPU accelerator device on
+- [x] RFC-0009 smoke benchmark rows record a non-WGPU accelerator device on
       accelerator hardware.
-- [ ] RFC-0017 is marked Superseded and not implemented as the current fix.
-- [ ] RFC-0016, `docs/plans/README.md`, and docs/memory record that RFC-0016 is
+- [x] RFC-0017 is marked Superseded and not implemented as the current fix.
+- [x] RFC-0016, `docs/plans/README.md`, and docs/memory record that RFC-0016 is
       amended by this non-WGPU backend policy.
-- [ ] RFC-0011 external evidence gates remain open for standard/full benchmark
+- [x] RFC-0011 external evidence gates remain open for standard/full benchmark
       claims until measured artifacts are recorded.
-- [ ] MPS/LibTorch support is documented as a `tch`/PyTorch-backed
+- [x] MPS/LibTorch support is documented as a `tch`/PyTorch-backed
       follow-up/non-blocking path for this Linux CUDA implementation.
 
 ## 5. Verification

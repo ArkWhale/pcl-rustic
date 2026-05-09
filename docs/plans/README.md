@@ -31,7 +31,7 @@ rfc-{id}-{YYYY-MM-DD}-{kebab-case-title}.md
 | [RFC-0015](rfc-0015-2026-05-08-open3d-comparison-charts.md) | Open3D Comparison Benchmark Charts | Implemented (external evidence open) | Benchmarking / migration evidence |
 | [RFC-0016](rfc-0016-2026-05-09-burn-dispatch-backend.md) | Burn Dispatch Backend Migration | Implemented | RFC-0004/RFC-0012 backend policy |
 | [RFC-0017](rfc-0017-2026-05-09-gpu-benchmark-preflight.md) | GPU Benchmark Allocation Preflight | Superseded by RFC-0018 | RFC-0009/RFC-0016 benchmark safety |
-| [RFC-0018](rfc-0018-2026-05-09-non-wgpu-dispatch-backends.md) | Non-WGPU Dispatch Backend Selection | Accepted | RFC-0016 backend policy amendment |
+| [RFC-0018](rfc-0018-2026-05-09-non-wgpu-dispatch-backends.md) | Non-WGPU Dispatch Backend Selection | Implemented | RFC-0016 backend policy amendment |
 
 ## Process
 

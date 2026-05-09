@@ -56,18 +56,19 @@ without vendoring or pinning a temporary Git SHA.
 
 ### 3.2 Dispatch Feature Mapping
 
-Dispatch WGPU variants are feature selected. The dependency configuration must
-enable `dispatch` plus exactly one WGPU target feature for the supported
-platform, and must remove `router`.
+RFC-0018 amends the implemented Linux feature mapping after the WGPU buffer
+limit finding. The dependency configuration must enable `dispatch`, a native
+accelerator backend, and `cpu`, and must remove `router`.
 
 The default Linux development target is:
 
 ```toml
-burn = { version = "0.21.0", features = ["std", "dispatch", "vulkan", "ndarray", "cpu"] }
+burn = { version = "0.21.0", default-features = false, features = ["std", "dispatch", "cuda", "cpu"] }
 ```
 
-`metal` may replace `vulkan` for macOS, and `webgpu` may replace it only for a
-WebGPU target. Multiple WGPU target features must not be enabled together.
+WGPU features (`vulkan`, `metal`, `webgpu`, `wgpu`) are not part of the default
+backend stack. MPS remains a future `tch`/PyTorch-backed platform path per
+RFC-0018.
 
 ### 3.3 Tensor Adapter Boundary
 
@@ -96,8 +97,8 @@ tensors, should move behind adapter helper functions during this migration.
 
 ### 3.4 GPU-First Runtime Contract
 
-`default_device()` must choose GPU when Burn reports an available WGPU device.
-It may choose CPU only when no WGPU device exists.
+`default_device()` must choose the configured native accelerator when its smoke
+check passes. It may choose CPU only when no configured accelerator is usable.
 
 `gpu_device()` must return `Result<BackendDevice>` and surface a clean Python
 error through `.to("gpu")` if no GPU exists. It must not silently construct a
@@ -111,10 +112,11 @@ be used as an implicit fix for benchmark scalability.
 RFC-0009 `standard` and `full` modes must keep the default backend behavior.
 They must not set an environment variable that forces CPU execution.
 
-If high-scale WGPU allocation still fails after Dispatch migration, the next
-fix must address GPU allocation strategy directly, such as chunked
-concatenation, streaming benchmark data, or backend-specific tensor creation.
-That follow-up requires either a separate RFC or an amendment to this one.
+RFC-0018 supersedes the WGPU/Vulkan backend choice because WGPU exposes
+storage-buffer limits around `i32::MAX` bytes. If high-scale native CUDA/MPS
+allocation still fails after RFC-0018, the next fix must address native-backend
+allocation strategy directly, such as chunked concatenation, streaming
+benchmark data, or backend-specific tensor creation.
 
 When a benchmark run is meant to support a GPU performance claim, the recorded
 rows must show a Dispatch GPU device name. CPU-only Dispatch runs may validate
@@ -146,8 +148,8 @@ runtime backend abstraction with Dispatch. On implementation, update:
 
 - [x] Burn is upgraded to `0.21.0` or a later compatible stable release that
       includes Dispatch backend support.
-- [x] Cargo features enable `dispatch` plus exactly one WGPU target feature
-      (`vulkan`, `metal`, or `webgpu`) and remove `router`.
+- [x] Cargo features enable `dispatch`, `cuda`, and `cpu` for the default Linux
+      backend stack and remove `router` and WGPU target features.
 - [x] `src/utils/tensor.rs` uses Dispatch aliases and Dispatch devices instead
       of `Router<(Wgpu, NdArray)>` and router `MultiDevice`.
 - [x] `default_device()` remains GPU-first and does not force CPU for
@@ -196,7 +198,7 @@ before final commit.
 |---|---|
 | Dispatch is not available in the configured registry yet | Keep RFC accepted but implementation blocked; do not pin an unreleased Git dependency. |
 | Dispatch API names differ from the draft PR | Update only `src/utils/tensor.rs`; do not leak Dispatch details across feature modules. |
-| Incorrect feature flags produce CPU-only Dispatch | Require `dispatch` plus exactly one WGPU target feature and verify GPU device reporting where GPU evidence is claimed. |
+| Incorrect feature flags produce CPU-only Dispatch | Require `dispatch` plus the RFC-0018 native accelerator feature and verify GPU device reporting where GPU evidence is claimed. |
 | GPU allocation still fails for RFC-0009 full mode | Track as GPU allocation/chunking work, not as a CPU fallback policy. |
 | PR #4717 changes the Tensor API after this migration | Keep backend-generic usage behind aliases so the follow-up edit is localized. |
 
@@ -206,11 +208,11 @@ before final commit.
 - Publishing new performance numbers.
 - Changing the public Python device API beyond preserving `.to("cpu")`,
   `.to("gpu")`, `device()`, and `has_wgpu_device()`.
-- Adding CUDA, ROCm, or other non-WGPU backends.
+- Adding ROCm or other non-CUDA backends.
 
 ## 8. Remaining Limitations
 
-- If Dispatch still hits WGPU buffer limits, should RFC-0009 full mode move to
-  chunked GPU concatenation or split benchmark rows by chunk size? This remains
-  unresolved GPU allocation work and must not be treated as a reason to force
-  RFC-0009 `standard` or `full` runs onto CPU.
+- If native Dispatch backends still hit allocation limits, should RFC-0009 full
+  mode move to chunked GPU concatenation or split benchmark rows by chunk size?
+  This remains unresolved GPU allocation work and must not be treated as a
+  reason to force RFC-0009 `standard` or `full` runs onto CPU.

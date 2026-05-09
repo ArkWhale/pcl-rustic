@@ -1,5 +1,5 @@
 use crate::utils::error::{PointCloudError, Result};
-use burn::backend::wgpu::WgpuDevice;
+use burn::backend::cuda::CudaDevice;
 use burn::tensor::backend::{Backend as BackendTrait, BackendTypes};
 use burn::tensor::{Tensor, TensorData};
 use burn::{Dispatch, DispatchDevice};
@@ -17,12 +17,12 @@ static GPU_DEVICE: OnceLock<Option<BackendDevice>> = OnceLock::new();
 ///
 /// 工作原理：
 /// 1. Dispatch backend 包含 Cargo feature 启用的后端设备
-/// 2. 默认选择 WGPU/Vulkan GPU
-/// 3. 只有没有 GPU 设备时才回退到 CPU
+/// 2. 默认选择原生 CUDA GPU
+/// 3. 只有没有可用加速器时才回退到 CPU
 pub fn default_device() -> BackendDevice {
     if has_wgpu_device() {
-        log::info!("Using GPU backend (Dispatch/Vulkan)");
-        return gpu_device().expect("WGPU device disappeared after availability check");
+        log::info!("Using GPU backend (Dispatch/CUDA)");
+        return gpu_device().expect("CUDA device disappeared after availability check");
     }
     log::warn!("GPU not available, falling back to CPU backend");
     cpu_device()
@@ -37,7 +37,7 @@ pub fn has_wgpu_device() -> bool {
 pub fn gpu_device() -> Result<BackendDevice> {
     detect_gpu_device().ok_or_else(|| {
         PointCloudError::InvalidParameter(
-            "GPU device requested but no WGPU device is available".to_string(),
+            "GPU device requested but no accelerator device is available".to_string(),
         )
     })
 }
@@ -53,24 +53,24 @@ fn detect_gpu_device() -> Option<BackendDevice> {
 }
 
 fn probe_gpu_device() -> Option<BackendDevice> {
-    for candidate in [
-        WgpuDevice::DiscreteGpu(0),
-        WgpuDevice::IntegratedGpu(0),
-        WgpuDevice::VirtualGpu(0),
-    ] {
-        let device = DispatchDevice::Vulkan(candidate);
-        if gpu_smoke_check(&device) {
-            return Some(device);
-        }
+    let device = DispatchDevice::Cuda(CudaDevice { index: 0 });
+    if accelerator_smoke_check(&device) {
+        return Some(device);
     }
     None
 }
 
-fn gpu_smoke_check(device: &BackendDevice) -> bool {
+fn accelerator_smoke_check(device: &BackendDevice) -> bool {
     std::panic::catch_unwind(|| {
-        let tensor = Tensor::<Backend, 2>::zeros([1, 1], device);
-        drop(tensor);
+        let tensor_data = TensorData::from([1.0f32, 2.0, 3.0, 4.0]);
+        let tensor = Tensor::<Backend, 1>::from_data(tensor_data, device).reshape([2, 2]);
+        let result = (tensor.clone() + tensor)
+            .reshape([4])
+            .to_data()
+            .to_vec::<f32>()
+            .ok();
         <Backend as BackendTrait>::sync(device).is_ok()
+            && matches!(result.as_deref(), Some([2.0, 4.0, 6.0, 8.0]))
     })
     .unwrap_or(false)
 }
