@@ -31,7 +31,10 @@ Router to Burn Dispatch while preserving GPU-first behavior and preparing for
 Burn's planned backend-parameter removal. RFC-0017 was accepted and then
 superseded before implementation by RFC-0018. RFC-0018 amends RFC-0016 to avoid
 WGPU/Vulkan for large tensor workloads and use non-WGPU Dispatch backends,
-starting with CUDA on Linux plus CPU fallback.
+starting with CUDA on Linux plus CPU fallback. RFC-0019 was added and accepted
+on 2026-05-09 after full-mode CUDA verification showed C20 concatenate could
+run on CUDA but concatenate+voxelize needed resource-aware execution rather
+than CPU fallback or fake benchmark rows.
 
 | RFC | Status | Summary |
 |---|---|---|
@@ -52,6 +55,7 @@ starting with CUDA on Linux plus CPU fallback.
 | RFC-0016 Burn Dispatch Backend Migration | Implemented, amended by RFC-0018 | Burn 0.21 Dispatch backend is configured, Router is removed, tensor construction helpers are centralized in `src/utils/tensor.rs`, and `.to("gpu")` now reports unavailable GPU as a Python error. |
 | RFC-0017 GPU Benchmark Allocation Preflight | Superseded by RFC-0018 | WGPU allocation preflight was not implemented; RFC-0018 replaces it by removing WGPU/Vulkan from the default large-tensor backend path. |
 | RFC-0018 Non-WGPU Dispatch Backend Selection | Implemented | Default Linux backend features use Burn Dispatch CUDA + CPU, not WGPU/Vulkan; RFC-0009 smoke rows must record the actual backend before supporting any benchmark claim. |
+| RFC-0019 Resource-Aware Full Benchmark Execution | Accepted | Full/standard benchmark rows must remain accelerator-backed, skip oversized rows before allocation with durable skip artifacts, and avoid pathological near-identity concat voxelization. |
 
 ## Implemented Evidence
 
