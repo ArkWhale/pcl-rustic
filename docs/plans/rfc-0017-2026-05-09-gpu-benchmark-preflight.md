@@ -1,6 +1,6 @@
 # RFC-0017: GPU Benchmark Allocation Preflight
 
-- **Status:** Accepted
+- **Status:** Superseded by RFC-0018
 - **Date:** 2026-05-09
 - **Author:** Codex
 - **Related:** RFC-0009, RFC-0011, RFC-0016
@@ -10,6 +10,10 @@
 Add a GPU allocation preflight to the RFC-0009 benchmark harness so high-scale
 benchmark cases skip before creating WGPU tensors that exceed a configured
 single-allocation limit.
+
+**Supersession note:** RFC-0018 supersedes this RFC before implementation. The
+accepted fix for the reported failure is to avoid WGPU for large tensor
+benchmarks and use non-WGPU Dispatch backends, starting with CUDA on Linux.
 
 This is not a CPU fallback. Standard and full benchmark modes remain GPU-first
 under RFC-0016. If a case exceeds the configured conservative single-tensor
