@@ -30,6 +30,7 @@ rfc-{id}-{YYYY-MM-DD}-{kebab-case-title}.md
 | [RFC-0014](rfc-0014-2026-05-08-las-point-format-10-api-policy.md) | LAS Point Format 10 Export API And Payload Policy | Implemented | RFC-0013 policy |
 | [RFC-0015](rfc-0015-2026-05-08-open3d-comparison-charts.md) | Open3D Comparison Benchmark Charts | Implemented (external evidence open) | Benchmarking / migration evidence |
 | [RFC-0016](rfc-0016-2026-05-09-burn-dispatch-backend.md) | Burn Dispatch Backend Migration | Implemented | RFC-0004/RFC-0012 backend policy |
+| [RFC-0017](rfc-0017-2026-05-09-gpu-benchmark-preflight.md) | GPU Benchmark Allocation Preflight | Accepted | RFC-0009/RFC-0016 benchmark safety |
 
 ## Process
 
