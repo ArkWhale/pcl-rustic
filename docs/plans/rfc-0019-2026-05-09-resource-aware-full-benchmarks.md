@@ -1,6 +1,6 @@
 # RFC-0019: Resource-Aware Full Benchmark Execution
 
-- **Status:** Accepted
+- **Status:** Implemented
 - **Date:** 2026-05-09
 - **Author:** Codex
 - **Related:** RFC-0009, RFC-0011, RFC-0015, RFC-0018
@@ -135,34 +135,34 @@ a skip artifact, while unexpected runtime failure is a failure.
 
 ## 4. Acceptance Criteria
 
-- [ ] Full-mode C20 concatenate succeeds on CUDA and writes `device_name`
+- [x] Full-mode C20 concatenate succeeds on CUDA and writes `device_name`
       containing `Cuda`.
-- [ ] Full-mode C20 concatenate+voxelize succeeds on CUDA and writes
+- [x] Full-mode C20 concatenate+voxelize succeeds on CUDA and writes
       `device_name` containing `Cuda`.
-- [ ] Concat+voxelize output for C20 is greater than zero and less than or
+- [x] Concat+voxelize output for C20 is greater than zero and less than or
       equal to 50% of the 200M-point input.
-- [ ] Rows that exceed detected accelerator or host-memory budget are skipped
+- [x] Rows that exceed detected accelerator or host-memory budget are skipped
       before generating synthetic NumPy arrays or point clouds.
-- [ ] Resource preflight checks both estimated peak working set and estimated
+- [x] Resource preflight checks both estimated peak working set and estimated
       maximum single allocation/staging buffer.
-- [ ] If standard/full mode cannot detect accelerator memory, rows are skipped
+- [x] If standard/full mode cannot detect accelerator memory, rows are skipped
       before allocation and recorded in the skip artifact.
-- [ ] No full-mode row is measured on CPU when an accelerator benchmark row was
+- [x] No full-mode row is measured on CPU when an accelerator benchmark row was
       requested.
-- [ ] Benchmark rows assert accepted accelerator device names before writing
+- [x] Benchmark rows assert accepted accelerator device names before writing
       measured CSV results in standard/full mode.
-- [ ] Skipped rows are not written as successful timing rows in
+- [x] Skipped rows are not written as successful timing rows in
       `reports/benchmarks/rfc0009-full.csv`.
-- [ ] Standard/full skipped rows are written to
+- [x] Standard/full skipped rows are written to
       `reports/benchmarks/rfc0009-{mode}-skips.csv` with case, operation,
       parameters, reason, estimates, detected memory, device, git SHA, and run
       date.
-- [ ] One skipped row does not abort unrelated rows in the same matrix.
-- [ ] `rtk uv run pytest tests/test_benchmark.py -q --run-slow
+- [x] One skipped row does not abort unrelated rows in the same matrix.
+- [x] `rtk uv run pytest tests/test_benchmark.py -q --run-slow
       --benchmark-mode=full --no-cov` no longer panics on the 24 GB CUDA host.
-- [ ] Smoke benchmark behavior remains unchanged except for shared preflight
+- [x] Smoke benchmark behavior remains unchanged except for shared preflight
       helpers.
-- [ ] RFC-0011 external evidence gates remain open for skipped full-matrix
+- [x] RFC-0011 external evidence gates remain open for skipped full-matrix
       cases.
 
 ## 5. Verification
@@ -178,6 +178,13 @@ rtk uv run pytest tests/test_benchmark.py -q --run-slow --benchmark-mode=full --
 
 The full-mode command must not panic. It may report skips for rows that exceed
 the detected memory budget.
+
+Verified on 2026-05-09 on an RTX 3090:
+
+- `rfc0009-full.csv` recorded 11 measured rows, all `Cuda(Cuda(0))`.
+- C20 concat+voxelize reduced 200,000,000 points to 799,036 points.
+- `rfc0009-full-skips.csv` recorded 46 skipped oversized rows.
+- The command completed in 548.01 seconds with 2 pytest tests passed.
 
 ## 6. Risks And Mitigations
 

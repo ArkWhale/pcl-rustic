@@ -13,13 +13,14 @@ import platform
 import subprocess
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 
 import numpy as np
 import pytest
 
-from pcl_rustic import DownsampleStrategy, PointCloud
+from pcl_rustic import DownsampleStrategy, PointCloud, has_wgpu_device
 
 pytestmark = [pytest.mark.benchmark, pytest.mark.slow]
 
@@ -45,7 +46,8 @@ CSV_COLUMNS = [
 FULL_CONCAT_COUNTS = (20, 40, 80, 120, 160, 200)
 FULL_POINTS_PER_CLOUD = 10_000_000
 SMOKE_POINTS_PER_CLOUD = 1_000_000
-CONCAT_VOXEL_SIZE = 0.15
+SMOKE_CONCAT_VOXEL_SIZE = 0.15
+FULL_CONCAT_VOXEL_SIZE = 5.0
 
 FULL_DOWNSAMPLE_POINTS = {
     "D20": 20_000_000,
@@ -61,8 +63,42 @@ DOWNSAMPLE_STRATEGIES = (
     ("AVERAGE", DownsampleStrategy.AVERAGE, None),
     ("RANDOM_SEEDED", DownsampleStrategy.RANDOM_SEEDED, 42),
 )
-ATTRIBUTE_BYTES_PER_POINT = 12 + 4 + 1 + 1 + 8
+XYZ_BYTES_PER_POINT = 12
+NON_XYZ_ATTRIBUTE_BYTES_PER_POINT = 4 + 1 + 1 + 8
+ATTRIBUTE_BYTES_PER_POINT = XYZ_BYTES_PER_POINT + NON_XYZ_ATTRIBUTE_BYTES_PER_POINT
+SYNTHETIC_HOST_BYTES_PER_POINT = int(
+    os.environ.get("PCL_RUSTIC_BENCH_HOST_BYTES_PER_POINT", "160")
+)
+DEVICE_BUDGET_FRACTION = float(
+    os.environ.get("PCL_RUSTIC_BENCH_DEVICE_BUDGET_FRACTION", "0.65")
+)
+SINGLE_ALLOCATION_FRACTION = float(
+    os.environ.get("PCL_RUSTIC_BENCH_SINGLE_ALLOCATION_FRACTION", "0.12")
+)
+HOST_BUDGET_FRACTION = float(
+    os.environ.get("PCL_RUSTIC_BENCH_HOST_BUDGET_FRACTION", "0.70")
+)
+CONCAT_VOXEL_OUTPUT_RATIO_ESTIMATE = float(
+    os.environ.get("PCL_RUSTIC_BENCH_CONCAT_VOXEL_OUTPUT_RATIO", "0.05")
+)
+CONCAT_VOXEL_MAX_OUTPUT_RATIO = 0.50
 _INITIALIZED_CSV_PATHS: set[Path] = set()
+
+SKIP_COLUMNS = [
+    "case_id",
+    "operation",
+    "input_points",
+    "voxel_size",
+    "strategy",
+    "reason",
+    "estimated_host_bytes",
+    "estimated_peak_device_bytes",
+    "estimated_max_single_allocation_bytes",
+    "detected_device_memory_bytes",
+    "detected_device",
+    "git_sha",
+    "run_date",
+]
 
 
 @dataclass(frozen=True)
@@ -84,6 +120,20 @@ class DownsampleCase:
     strategy_name: str
     strategy: int
     seed: int | None
+
+
+@dataclass(frozen=True)
+class BenchmarkBudget:
+    device_name: str
+    device_memory_bytes: int | None
+    host_memory_bytes: int | None
+
+
+@dataclass(frozen=True)
+class ResourceEstimate:
+    host_bytes: int
+    peak_device_bytes: int
+    max_single_allocation_bytes: int
 
 
 def concat_cases(mode: str) -> list[ConcatCase]:
@@ -118,6 +168,135 @@ def downsample_cases(mode: str) -> list[DownsampleCase]:
         for voxel_size in DOWNSAMPLE_VOXEL_SIZES
         for strategy_name, strategy, seed in DOWNSAMPLE_STRATEGIES
     ]
+
+
+def concat_voxel_size(mode: str) -> float:
+    return SMOKE_CONCAT_VOXEL_SIZE if mode == "smoke" else FULL_CONCAT_VOXEL_SIZE
+
+
+def gpu_required(mode: str) -> bool:
+    return mode in {"standard", "full"}
+
+
+def accepted_accelerator(device_name: str) -> bool:
+    return any(token in device_name for token in ("Cuda", "Mps", "Metal", "Rocm"))
+
+
+def accelerator_device_name() -> str:
+    if not has_wgpu_device():
+        return "unavailable"
+    probe = PointCloud.from_numpy(
+        {
+            "xyz": np.array([[0.0, 0.0, 0.0]], dtype=np.float32),
+            "intensity": np.array([1.0], dtype=np.float32),
+            "classification": np.array([1], dtype=np.uint8),
+            "return_number": np.array([1], dtype=np.uint8),
+            "gps_time": np.array([0.0], dtype=np.float64),
+        }
+    )
+    return str(probe.device())
+
+
+def benchmark_budget(mode: str) -> BenchmarkBudget:
+    if not gpu_required(mode):
+        return BenchmarkBudget(
+            device_name="not-required",
+            device_memory_bytes=detect_device_memory_bytes(),
+            host_memory_bytes=detect_host_memory_bytes(),
+        )
+    return BenchmarkBudget(
+        device_name=accelerator_device_name(),
+        device_memory_bytes=detect_device_memory_bytes(),
+        host_memory_bytes=detect_host_memory_bytes(),
+    )
+
+
+def detect_device_memory_bytes() -> int | None:
+    override = os.environ.get("PCL_RUSTIC_BENCH_DEVICE_MEMORY_BYTES")
+    if override:
+        return int(override)
+    try:
+        output = subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=memory.total",
+                "--format=csv,noheader,nounits",
+            ],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return None
+    first_line = output.strip().splitlines()[0]
+    return int(first_line.strip()) * 1024 * 1024
+
+
+def detect_host_memory_bytes() -> int | None:
+    override = os.environ.get("PCL_RUSTIC_BENCH_HOST_MEMORY_BYTES")
+    if override:
+        return int(override)
+    try:
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        page_count = os.sysconf("SC_PHYS_PAGES")
+    except (AttributeError, ValueError, OSError):
+        return None
+    return int(page_size * page_count)
+
+
+def concat_estimate(case: ConcatCase) -> ResourceEstimate:
+    input_points = case.input_points
+    xyz_bytes = input_points * XYZ_BYTES_PER_POINT
+    return ResourceEstimate(
+        host_bytes=input_points * SYNTHETIC_HOST_BYTES_PER_POINT,
+        peak_device_bytes=xyz_bytes * 2,
+        max_single_allocation_bytes=xyz_bytes,
+    )
+
+
+def concat_voxel_estimate(case: ConcatCase) -> ResourceEstimate:
+    input_points = case.input_points
+    output_upper = max(1, int(input_points * CONCAT_VOXEL_OUTPUT_RATIO_ESTIMATE))
+    input_xyz_bytes = input_points * XYZ_BYTES_PER_POINT
+    output_xyz_bytes = output_upper * XYZ_BYTES_PER_POINT
+    return ResourceEstimate(
+        host_bytes=input_points * SYNTHETIC_HOST_BYTES_PER_POINT,
+        peak_device_bytes=(input_xyz_bytes + output_xyz_bytes) * 2,
+        max_single_allocation_bytes=max(input_xyz_bytes, output_xyz_bytes * 3),
+    )
+
+
+def downsample_estimate(case: DownsampleCase) -> ResourceEstimate:
+    input_points = case.input_points
+    xyz_bytes = input_points * XYZ_BYTES_PER_POINT
+    return ResourceEstimate(
+        host_bytes=input_points * SYNTHETIC_HOST_BYTES_PER_POINT,
+        peak_device_bytes=xyz_bytes * 4,
+        max_single_allocation_bytes=xyz_bytes * 6,
+    )
+
+
+def skip_reason(
+    mode: str,
+    estimate: ResourceEstimate,
+    budget: BenchmarkBudget,
+) -> str | None:
+    if not gpu_required(mode):
+        return None
+    if not accepted_accelerator(budget.device_name):
+        return f"standard/full benchmark requires accelerator, got {budget.device_name}"
+    if budget.device_memory_bytes is None:
+        return "accelerator memory is unknown"
+    if estimate.peak_device_bytes > int(budget.device_memory_bytes * DEVICE_BUDGET_FRACTION):
+        return "estimated peak device bytes exceed accelerator budget"
+    if estimate.max_single_allocation_bytes > int(
+        budget.device_memory_bytes * SINGLE_ALLOCATION_FRACTION
+    ):
+        return "estimated max single allocation exceeds accelerator budget"
+    if budget.host_memory_bytes is None:
+        return "host memory is unknown"
+    if estimate.host_bytes > int(budget.host_memory_bytes * HOST_BUDGET_FRACTION):
+        return "estimated host bytes exceed host budget"
+    return None
 
 
 def generate_rfc0009_cloud_data(
@@ -175,6 +354,15 @@ def benchmark_csv_path(mode: str) -> Path:
     return path
 
 
+def benchmark_skip_csv_path(mode: str) -> Path:
+    path = Path("reports") / "benchmarks" / f"rfc0009-{mode}-skips.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path not in _INITIALIZED_CSV_PATHS:
+        path.unlink(missing_ok=True)
+        _INITIALIZED_CSV_PATHS.add(path)
+    return path
+
+
 def write_csv_row(path: Path, row: dict[str, object]) -> None:
     needs_header = not path.exists() or path.stat().st_size == 0
     with path.open("a", newline="", encoding="utf-8") as handle:
@@ -182,6 +370,54 @@ def write_csv_row(path: Path, row: dict[str, object]) -> None:
         if needs_header:
             writer.writeheader()
         writer.writerow({column: row.get(column, "") for column in CSV_COLUMNS})
+
+
+def write_skip_row(
+    path: Path,
+    *,
+    case_id: str,
+    operation: str,
+    input_points: int,
+    voxel_size: float | None,
+    strategy: str | None,
+    reason: str,
+    estimate: ResourceEstimate,
+    budget: BenchmarkBudget,
+) -> None:
+    needs_header = not path.exists() or path.stat().st_size == 0
+    with path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=SKIP_COLUMNS)
+        if needs_header:
+            writer.writeheader()
+        writer.writerow(
+            {
+                "case_id": case_id,
+                "operation": operation,
+                "input_points": input_points,
+                "voxel_size": "" if voxel_size is None else voxel_size,
+                "strategy": "" if strategy is None else strategy,
+                "reason": reason,
+                "estimated_host_bytes": estimate.host_bytes,
+                "estimated_peak_device_bytes": estimate.peak_device_bytes,
+                "estimated_max_single_allocation_bytes": (
+                    estimate.max_single_allocation_bytes
+                ),
+                "detected_device_memory_bytes": (
+                    "" if budget.device_memory_bytes is None else budget.device_memory_bytes
+                ),
+                "detected_device": budget.device_name,
+                "git_sha": git_sha(),
+                "run_date": datetime.now(UTC).date().isoformat(),
+            }
+        )
+
+
+def write_measured_row(mode: str, path: Path, row: dict[str, object]) -> None:
+    if gpu_required(mode) and not accepted_accelerator(str(row["device_name"])):
+        raise AssertionError(
+            f"standard/full benchmark row must use accelerator, got {row['device_name']}"
+        )
+    write_csv_row(path, row)
 
 
 def measure(operation: Callable[[], PointCloud]) -> tuple[PointCloud, float, int]:
@@ -260,8 +496,37 @@ class TestRFC0009BenchmarkSuite:
     def test_concat_matrix_writes_csv(self, request: pytest.FixtureRequest):
         mode = benchmark_mode(request)
         csv_path = benchmark_csv_path(mode)
+        skip_csv_path = benchmark_skip_csv_path(mode)
+        budget = benchmark_budget(mode)
 
         for case in concat_cases(mode):
+            concat_resource_estimate = concat_estimate(case)
+            reason = skip_reason(mode, concat_resource_estimate, budget)
+            if reason is not None:
+                write_skip_row(
+                    skip_csv_path,
+                    case_id=case.case_id,
+                    operation="concatenate",
+                    input_points=case.input_points,
+                    voxel_size=None,
+                    strategy=None,
+                    reason=reason,
+                    estimate=concat_resource_estimate,
+                    budget=budget,
+                )
+                write_skip_row(
+                    skip_csv_path,
+                    case_id=case.case_id,
+                    operation="concatenate_voxelize",
+                    input_points=case.input_points,
+                    voxel_size=concat_voxel_size(mode),
+                    strategy="NEAREST_TO_CENTROID",
+                    reason="concatenate prerequisite skipped",
+                    estimate=concat_voxel_estimate(case),
+                    budget=budget,
+                )
+                continue
+
             clouds = [
                 make_point_cloud(
                     case.points_per_cloud,
@@ -279,7 +544,8 @@ class TestRFC0009BenchmarkSuite:
             assert concatenated.point_count() == case.input_points
             assert_rfc_attrs(concatenated)
 
-            write_csv_row(
+            write_measured_row(
+                mode,
                 csv_path,
                 base_row(
                     case_id=case.case_id,
@@ -295,16 +561,38 @@ class TestRFC0009BenchmarkSuite:
                 ),
             )
 
+            voxel_size = concat_voxel_size(mode)
+            voxel_resource_estimate = concat_voxel_estimate(case)
+            reason = skip_reason(mode, voxel_resource_estimate, budget)
+            if reason is not None:
+                write_skip_row(
+                    skip_csv_path,
+                    case_id=case.case_id,
+                    operation="concatenate_voxelize",
+                    input_points=case.input_points,
+                    voxel_size=voxel_size,
+                    strategy="NEAREST_TO_CENTROID",
+                    reason=reason,
+                    estimate=voxel_resource_estimate,
+                    budget=budget,
+                )
+                continue
+
             downsampled, voxel_time, voxel_rss = measure(
                 lambda pc=concatenated: pc.voxel_downsample(
-                    CONCAT_VOXEL_SIZE,
+                    voxel_size,
                     DownsampleStrategy.NEAREST_TO_CENTROID,
                 )
             )
             assert 0 < downsampled.point_count() <= concatenated.point_count()
+            if gpu_required(mode) and case.case_id == "C20":
+                assert downsampled.point_count() <= int(
+                    concatenated.point_count() * CONCAT_VOXEL_MAX_OUTPUT_RATIO
+                )
             assert_rfc_attrs(downsampled)
 
-            write_csv_row(
+            write_measured_row(
+                mode,
                 csv_path,
                 base_row(
                     case_id=case.case_id,
@@ -312,7 +600,7 @@ class TestRFC0009BenchmarkSuite:
                     input_clouds=case.input_clouds,
                     input_points=case.input_points,
                     output_points=downsampled.point_count(),
-                    voxel_size=CONCAT_VOXEL_SIZE,
+                    voxel_size=voxel_size,
                     strategy="NEAREST_TO_CENTROID",
                     wall_time_s=concat_time + voxel_time,
                     peak_rss=max(concat_rss, voxel_rss),
@@ -323,8 +611,26 @@ class TestRFC0009BenchmarkSuite:
     def test_downsampling_matrix_writes_csv(self, request: pytest.FixtureRequest):
         mode = benchmark_mode(request)
         csv_path = benchmark_csv_path(mode)
+        skip_csv_path = benchmark_skip_csv_path(mode)
+        budget = benchmark_budget(mode)
 
         for case in downsample_cases(mode):
+            resource_estimate = downsample_estimate(case)
+            reason = skip_reason(mode, resource_estimate, budget)
+            if reason is not None:
+                write_skip_row(
+                    skip_csv_path,
+                    case_id=case.case_id,
+                    operation="voxel_downsample",
+                    input_points=case.input_points,
+                    voxel_size=case.voxel_size,
+                    strategy=case.strategy_name,
+                    reason=reason,
+                    estimate=resource_estimate,
+                    budget=budget,
+                )
+                continue
+
             pc = make_point_cloud(case.input_points, seed=20_000 + case.input_points)
             assert pc.point_count() == case.input_points
             assert_rfc_attrs(pc)
@@ -340,7 +646,8 @@ class TestRFC0009BenchmarkSuite:
             assert 0 < downsampled.point_count() <= pc.point_count()
             assert_rfc_attrs(downsampled)
 
-            write_csv_row(
+            write_measured_row(
+                mode,
                 csv_path,
                 base_row(
                     case_id=case.case_id,

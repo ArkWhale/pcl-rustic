@@ -34,7 +34,10 @@ WGPU/Vulkan for large tensor workloads and use non-WGPU Dispatch backends,
 starting with CUDA on Linux plus CPU fallback. RFC-0019 was added and accepted
 on 2026-05-09 after full-mode CUDA verification showed C20 concatenate could
 run on CUDA but concatenate+voxelize needed resource-aware execution rather
-than CPU fallback or fake benchmark rows.
+than CPU fallback or fake benchmark rows. RFC-0019 was implemented on
+2026-05-09 with resource preflight, durable skip artifacts, clean full-mode
+CUDA benchmark execution on the local RTX 3090, and a local CubeCL runtime
+patch for the debug-build drop-queue byte-counter overflow.
 
 | RFC | Status | Summary |
 |---|---|---|
@@ -55,7 +58,7 @@ than CPU fallback or fake benchmark rows.
 | RFC-0016 Burn Dispatch Backend Migration | Implemented, amended by RFC-0018 | Burn 0.21 Dispatch backend is configured, Router is removed, tensor construction helpers are centralized in `src/utils/tensor.rs`, and `.to("gpu")` now reports unavailable GPU as a Python error. |
 | RFC-0017 GPU Benchmark Allocation Preflight | Superseded by RFC-0018 | WGPU allocation preflight was not implemented; RFC-0018 replaces it by removing WGPU/Vulkan from the default large-tensor backend path. |
 | RFC-0018 Non-WGPU Dispatch Backend Selection | Implemented | Default Linux backend features use Burn Dispatch CUDA + CPU, not WGPU/Vulkan; RFC-0009 smoke rows must record the actual backend before supporting any benchmark claim. |
-| RFC-0019 Resource-Aware Full Benchmark Execution | Accepted | Full/standard benchmark rows must remain accelerator-backed, skip oversized rows before allocation with durable skip artifacts, and avoid pathological near-identity concat voxelization. |
+| RFC-0019 Resource-Aware Full Benchmark Execution | Implemented | Full/standard benchmark rows remain accelerator-backed, oversized rows skip before allocation with durable skip artifacts, C20 concat+voxelize uses meaningful downsampling, and the local CubeCL drop-queue overflow is patched. |
 
 ## Implemented Evidence
 
