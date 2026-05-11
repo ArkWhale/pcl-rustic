@@ -8,6 +8,9 @@ impl HighPerformancePointCloud {
         if self.point_count() == 0 {
             return Ok(self.clone());
         }
+        if let Some(translation) = translation_from_4x4(matrix) {
+            return self.translate(translation);
+        }
         let device = self.xyz_device();
         let flat: Vec<f32> = matrix.iter().flat_map(|row| row.iter().copied()).collect();
         let mat_tensor = tensor::tensor2_from_slice_on_device(&flat, 4, 4, &device)?;
@@ -145,6 +148,25 @@ impl HighPerformancePointCloud {
     }
 }
 
+fn translation_from_4x4(matrix: &[[f32; 4]; 4]) -> Option<[f32; 3]> {
+    let expected_linear: [[f32; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+    for row in 0..3 {
+        for col in 0..3 {
+            if matrix[row][col].to_bits() != expected_linear[row][col].to_bits() {
+                return None;
+            }
+        }
+    }
+    if matrix[3][0].to_bits() != 0.0f32.to_bits()
+        || matrix[3][1].to_bits() != 0.0f32.to_bits()
+        || matrix[3][2].to_bits() != 0.0f32.to_bits()
+        || matrix[3][3].to_bits() != 1.0f32.to_bits()
+    {
+        return None;
+    }
+    Some([matrix[0][3], matrix[1][3], matrix[2][3]])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -178,6 +200,31 @@ mod tests {
         assert!((xyz[0][0] - 2.0).abs() < 1e-5);
         assert!((xyz[0][1] - 2.0).abs() < 1e-5);
         assert!((xyz[0][2] - 3.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn four_by_four_translation_preserves_fractional_precision() {
+        let pc = HighPerformancePointCloud::from_xyz_vec(vec![
+            [3.2090764, 13.60938, -6.618447],
+            [-4.200236, 18.88349, -20.33915],
+        ])
+        .unwrap();
+        let matrix = [
+            [1.0, 0.0, 0.0, 1.0],
+            [0.0, 1.0, 0.0, -2.0],
+            [0.0, 0.0, 1.0, 0.5],
+            [0.0, 0.0, 0.0, 1.0],
+        ];
+
+        let result = pc.transform(&matrix).unwrap();
+        let xyz = result.get_xyz_vec();
+
+        assert!((xyz[0][0] - 4.2090764).abs() < 1e-5);
+        assert!((xyz[0][1] - 11.60938).abs() < 1e-5);
+        assert!((xyz[0][2] + 6.118447).abs() < 1e-5);
+        assert!((xyz[1][0] + 3.200236).abs() < 1e-5);
+        assert!((xyz[1][1] - 16.88349).abs() < 1e-5);
+        assert!((xyz[1][2] + 19.83915).abs() < 1e-5);
     }
 
     #[test]

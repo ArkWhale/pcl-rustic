@@ -289,6 +289,19 @@ class TestCoordinateTransform:
         with pytest.raises(ValueError):
             pc.transform([[1.0, 0.0], [0.0, 1.0]])
 
+    def test_4x4_translation_preserves_fractional_precision(self):
+        xyz = np.array(
+            [[3.2090764, 13.60938, -6.618447], [-4.200236, 18.88349, -20.33915]],
+            dtype=np.float32,
+        )
+        pc = PointCloud.from_xyz(xyz)
+        matrix = np.eye(4, dtype=np.float32)
+        matrix[:3, 3] = np.array([1.0, -2.0, 0.5], dtype=np.float32)
+
+        result = pc.transform(matrix).get_xyz()
+
+        np.testing.assert_allclose(result, xyz + matrix[:3, 3], rtol=1e-5, atol=1e-5)
+
     def test_translate_scale_rotate_wrappers(self):
         xyz = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
         pc = PointCloud.from_xyz(xyz)
