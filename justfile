@@ -22,32 +22,29 @@ test:
 test-slow:
     uv run pytest tests/ -v --run-slow
 
-# Run benchmark tests
-benchmark: benchmark-smoke
+# Run the unified benchmark suite.
+benchmark mode='fast' compare='false': build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    raw_mode="{{mode}}"
+    raw_compare="{{compare}}"
+    mode="${raw_mode#mode=}"
+    compare="${raw_compare#compare=}"
+    case "${mode}" in
+        fast) benchmark_mode="smoke" ;;
+        slow) benchmark_mode="standard" ;;
+        *) echo "mode must be fast or slow" >&2; exit 2 ;;
+    esac
+    compare_flag=()
+    case "${compare}" in
+        true|yes|1) compare_flag=(--benchmark-compare-open3d) ;;
+        false|no|0) ;;
+        *) echo "compare must be true or false" >&2; exit 2 ;;
+    esac
+    uv run --group benchmark pytest tests/test_open3d_benchmark.py -v -s --run-slow --benchmark-mode="${benchmark_mode}" "${compare_flag[@]}" --benchmark-json=reports/benchmarks/last-benchmark.json --no-cov
 
-benchmark-smoke: build
-    uv run pytest tests/test_benchmark.py -v -s --run-slow --benchmark-mode=smoke --no-cov
-
-benchmark-standard: build
-    uv run pytest tests/test_benchmark.py -v -s --run-slow --benchmark-mode=standard --no-cov
-
-benchmark-full: build
-    uv run pytest tests/test_benchmark.py -v -s --run-slow --benchmark-mode=full --no-cov
-
-benchmark-docs:
-    uv run python tools/render_benchmark_docs.py
-
-benchmark-compare-smoke: build
-    uv run --group benchmark pytest tests/test_open3d_benchmark.py -v -s --run-slow --benchmark-mode=smoke --benchmark-json=reports/benchmarks/open3d-comparison-smoke.json --no-cov
-
-benchmark-compare-standard: build
-    uv run --group benchmark pytest tests/test_open3d_benchmark.py -v -s --run-slow --benchmark-mode=standard --benchmark-json=reports/benchmarks/open3d-comparison-standard.json --no-cov
-
-benchmark-compare-full: build
-    uv run --group benchmark pytest tests/test_open3d_benchmark.py -v -s --run-slow --benchmark-mode=full --benchmark-json=reports/benchmarks/open3d-comparison-full.json --no-cov
-
-benchmark-compare-charts:
-    uv run --group benchmark python tools/render_open3d_benchmark_charts.py
+benchmark-visualize:
+    uv run --group benchmark python tools/render_open3d_benchmark_charts.py reports/benchmarks/last-benchmark.json --html-output reports/benchmarks/last-benchmark.html --summary-output reports/benchmarks/last-benchmark-summary.csv
 
 # Run Rust tests
 test-rust:

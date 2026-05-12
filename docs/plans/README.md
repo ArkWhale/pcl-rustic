@@ -33,6 +33,7 @@ rfc-{id}-{YYYY-MM-DD}-{kebab-case-title}.md
 | [RFC-0017](rfc-0017-2026-05-09-gpu-benchmark-preflight.md) | GPU Benchmark Allocation Preflight | Superseded by RFC-0018 | RFC-0009/RFC-0016 benchmark safety |
 | [RFC-0018](rfc-0018-2026-05-09-non-wgpu-dispatch-backends.md) | Non-WGPU Dispatch Backend Selection | Implemented | RFC-0016 backend policy amendment |
 | [RFC-0019](rfc-0019-2026-05-09-resource-aware-full-benchmarks.md) | Resource-Aware Full Benchmark Execution | Implemented | RFC-0009/RFC-0018 benchmark safety |
+| [RFC-0020](rfc-0020-2026-05-12-neighbor-hot-path-acceleration.md) | Neighbor Hot-Path Acceleration | Implemented | M4/M5/M6 performance |
 
 ## Process
 

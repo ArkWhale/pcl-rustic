@@ -7,9 +7,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from tests.test_open3d_benchmark import (
+    benchmark_libraries,
     comparable_operations,
     comparison_cases,
     make_metadata,
+    pcl_neighbor_execution_metadata,
 )
 
 
@@ -42,6 +44,23 @@ def test_comparable_operations_include_phase_families() -> None:
     assert "typed_concat" not in operations
 
 
+class Config:
+    def __init__(self, compare_open3d: bool) -> None:
+        self.compare_open3d = compare_open3d
+
+    def getoption(self, name: str) -> bool:
+        assert name == "--benchmark-compare-open3d"
+        return self.compare_open3d
+
+
+def test_benchmark_libraries_are_pcl_only_by_default() -> None:
+    assert benchmark_libraries(Config(compare_open3d=False)) == ("pcl_rustic",)
+
+
+def test_benchmark_libraries_add_open3d_when_requested() -> None:
+    assert benchmark_libraries(Config(compare_open3d=True)) == ("pcl_rustic", "open3d")
+
+
 def test_metadata_contract_is_self_describing() -> None:
     case = comparison_cases("smoke")[0]
 
@@ -66,3 +85,16 @@ def test_metadata_contract_is_self_describing() -> None:
     assert metadata["pcl_rustic_version"]
     assert "python_version" in metadata
     assert "numpy_version" in metadata
+
+
+def test_pcl_neighbor_execution_metadata_distinguishes_backend_and_storage() -> None:
+    class Cloud:
+        def device(self) -> str:
+            return "Cuda(Cuda(0))"
+
+    metadata = pcl_neighbor_execution_metadata(Cloud())
+
+    assert metadata["execution_backend"] == "cpu_rayon"
+    assert metadata["gpu_accelerated"] is False
+    assert metadata["storage_device"] == "Cuda(Cuda(0))"
+    assert metadata["rayon_current_num_threads"] >= 1

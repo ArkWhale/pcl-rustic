@@ -1,6 +1,10 @@
+use crate::neighbors::kdtree::KdTreeIndex;
 use crate::point_cloud::core::HighPerformancePointCloud;
 use crate::utils::error::{PointCloudError, Result};
 use nalgebra::{Matrix3, Matrix4, SMatrix, SVector, Vector3, Vector4, SVD};
+use rayon::prelude::*;
+
+const POINT_TO_POINT_PARALLEL_REDUCTION_THRESHOLD: usize = 1024;
 
 #[derive(Clone, Debug)]
 pub struct ICPConvergenceCriteria {
@@ -46,8 +50,10 @@ pub fn evaluate(
             "registration requires non-empty source and target clouds".to_string(),
         ));
     }
+    let target_index = target.kdtree()?;
     let transformed = transform_points(&source_xyz, &transformation);
-    let correspondences = find_correspondences(target, &transformed, max_correspondence_distance)?;
+    let correspondences =
+        find_correspondences(target_index, &transformed, max_correspondence_distance)?;
     metrics(source_xyz.len(), transformation, correspondences)
 }
 
@@ -93,23 +99,30 @@ pub fn icp(
     }
 
     let source_xyz = source.get_xyz_vec();
-    let target_xyz = target.get_xyz_vec();
+    let target_index = KdTreeIndex::build_from_xyz(target.get_xyz_vec())?;
+    let target_xyz = target_index.xyz();
     let mut transformation = init;
     let mut previous_fitness = f32::NAN;
     let mut previous_rmse = f32::NAN;
-    let mut last = evaluate(source, target, max_correspondence_distance, transformation)?;
+    let initial_transformed = transform_points(&source_xyz, &transformation);
+    let initial_correspondences = find_correspondences(
+        &target_index,
+        &initial_transformed,
+        max_correspondence_distance,
+    )?;
+    let mut last = metrics(source_xyz.len(), transformation, initial_correspondences)?;
 
     for _ in 0..criteria.max_iteration.max(1) {
         let transformed = transform_points(&source_xyz, &transformation);
         let correspondences =
-            find_correspondences(target, &transformed, max_correspondence_distance)?;
+            find_correspondences(&target_index, &transformed, max_correspondence_distance)?;
         if correspondences.is_empty() {
             return metrics(source_xyz.len(), transformation, correspondences);
         }
 
         let delta = match &estimation {
             TransformationEstimation::PointToPoint => {
-                estimate_point_to_point_delta(&transformed, &target_xyz, &correspondences)?
+                estimate_point_to_point_delta(&transformed, target_xyz, &correspondences)?
             }
             TransformationEstimation::PointToPlane => {
                 estimate_point_to_plane_delta(&transformed, target, &correspondences)?
@@ -125,7 +138,7 @@ pub fn icp(
         transformation = delta * transformation;
         let updated = transform_points(&source_xyz, &transformation);
         let updated_correspondences =
-            find_correspondences(target, &updated, max_correspondence_distance)?;
+            find_correspondences(&target_index, &updated, max_correspondence_distance)?;
         last = metrics(source_xyz.len(), transformation, updated_correspondences)?;
 
         let fitness_delta = if previous_fitness.is_finite() {
@@ -149,22 +162,23 @@ pub fn icp(
 }
 
 fn find_correspondences(
-    target: &HighPerformancePointCloud,
+    target_index: &KdTreeIndex,
     transformed_source: &[[f32; 3]],
     max_correspondence_distance: f32,
 ) -> Result<Vec<(u64, u64, f32)>> {
-    let hits = target.kdtree()?.knn(transformed_source, 1)?;
+    if max_correspondence_distance < 0.0 || !max_correspondence_distance.is_finite() {
+        return Err(PointCloudError::InvalidParameter(
+            "max_correspondence_distance must be finite and non-negative".to_string(),
+        ));
+    }
+    let max_correspondence_distance_sq =
+        (max_correspondence_distance * max_correspondence_distance).min(f32::MAX);
+    let hits = target_index.knn_one_within(transformed_source, max_correspondence_distance_sq)?;
     Ok(hits
         .into_iter()
         .enumerate()
-        .filter_map(|(source_idx, row)| {
-            row.first().and_then(|hit| {
-                if hit.distance <= max_correspondence_distance {
-                    Some((source_idx as u64, hit.index, hit.distance))
-                } else {
-                    None
-                }
-            })
+        .filter_map(|(source_idx, hit)| {
+            hit.map(|hit| (source_idx as u64, hit.index, hit.distance_sq))
         })
         .collect())
 }
@@ -178,7 +192,8 @@ fn metrics(
     let inlier_rmse = if correspondences.is_empty() {
         0.0
     } else {
-        (correspondences.iter().map(|(_, _, d)| d * d).sum::<f32>() / correspondences.len() as f32)
+        (correspondences.iter().map(|(_, _, d_sq)| d_sq).sum::<f32>()
+            / correspondences.len() as f32)
             .sqrt()
     };
     Ok(RegistrationResult {
@@ -204,21 +219,52 @@ fn estimate_point_to_point_delta(
     }
 
     let n = correspondences.len() as f32;
-    let mut source_centroid = Vector3::zeros();
-    let mut target_centroid = Vector3::zeros();
-    for (source_idx, target_idx, _) in correspondences {
-        source_centroid += point_vec(source[*source_idx as usize]);
-        target_centroid += point_vec(target[*target_idx as usize]);
-    }
+    let (mut source_centroid, mut target_centroid) =
+        if correspondences.len() >= POINT_TO_POINT_PARALLEL_REDUCTION_THRESHOLD {
+            correspondences
+                .par_iter()
+                .map(|(source_idx, target_idx, _)| {
+                    (
+                        point_vec(source[*source_idx as usize]),
+                        point_vec(target[*target_idx as usize]),
+                    )
+                })
+                .reduce(
+                    || (Vector3::zeros(), Vector3::zeros()),
+                    |(source_acc, target_acc), (source_point, target_point)| {
+                        (source_acc + source_point, target_acc + target_point)
+                    },
+                )
+        } else {
+            let mut source_centroid = Vector3::zeros();
+            let mut target_centroid = Vector3::zeros();
+            for (source_idx, target_idx, _) in correspondences {
+                source_centroid += point_vec(source[*source_idx as usize]);
+                target_centroid += point_vec(target[*target_idx as usize]);
+            }
+            (source_centroid, target_centroid)
+        };
     source_centroid /= n;
     target_centroid /= n;
 
-    let mut h = Matrix3::zeros();
-    for (source_idx, target_idx, _) in correspondences {
-        let ps = point_vec(source[*source_idx as usize]) - source_centroid;
-        let pt = point_vec(target[*target_idx as usize]) - target_centroid;
-        h += ps * pt.transpose();
-    }
+    let h = if correspondences.len() >= POINT_TO_POINT_PARALLEL_REDUCTION_THRESHOLD {
+        correspondences
+            .par_iter()
+            .map(|(source_idx, target_idx, _)| {
+                let ps = point_vec(source[*source_idx as usize]) - source_centroid;
+                let pt = point_vec(target[*target_idx as usize]) - target_centroid;
+                ps * pt.transpose()
+            })
+            .reduce(Matrix3::zeros, |acc, row| acc + row)
+    } else {
+        let mut h = Matrix3::zeros();
+        for (source_idx, target_idx, _) in correspondences {
+            let ps = point_vec(source[*source_idx as usize]) - source_centroid;
+            let pt = point_vec(target[*target_idx as usize]) - target_centroid;
+            h += ps * pt.transpose();
+        }
+        h
+    };
 
     let svd = SVD::new(h, true, true);
     let u = svd
@@ -394,7 +440,7 @@ fn point_vec(point: [f32; 3]) -> Vector3<f32> {
 
 fn transform_points(points: &[[f32; 3]], transformation: &Matrix4<f32>) -> Vec<[f32; 3]> {
     points
-        .iter()
+        .par_iter()
         .map(|p| {
             let out = transformation * Vector4::new(p[0], p[1], p[2], 1.0);
             [out[0] / out[3], out[1] / out[3], out[2] / out[3]]
@@ -548,6 +594,21 @@ mod tests {
         assert!(result.inlier_rmse < 1e-4);
         let score = evaluate(&source, &target, 0.2, result.transformation).unwrap();
         assert!((result.inlier_rmse - score.inlier_rmse).abs() < 1e-6);
+    }
+
+    #[test]
+    fn evaluate_accepts_large_finite_correspondence_distance() {
+        let source = HighPerformancePointCloud::from_xyz_vec(vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ])
+        .unwrap();
+        let target = source.translate([1.0, 1.0, 1.0]).unwrap();
+
+        let result = evaluate(&source, &target, f32::MAX, Matrix4::identity()).unwrap();
+
+        assert_eq!(result.fitness, 1.0);
     }
 
     #[test]

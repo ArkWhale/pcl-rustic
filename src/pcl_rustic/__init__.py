@@ -10,6 +10,7 @@ from ._core import (
     Octree,
     PointCloud,
     has_wgpu_device,
+    rayon_current_num_threads,
     registration,
 )
 
@@ -20,5 +21,6 @@ __all__ = [
     "NormalSearch",
     "Octree",
     "has_wgpu_device",
+    "rayon_current_num_threads",
     "registration",
 ]

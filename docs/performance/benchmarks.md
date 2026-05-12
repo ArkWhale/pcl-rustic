@@ -31,12 +31,13 @@ time per generated cloud.
 Run benchmarks through `just`:
 
 ```bash
-just benchmark-smoke
-just benchmark-standard
-just benchmark-full
+just benchmark mode=fast compare=false
+just benchmark mode=slow compare=false
+just benchmark mode=slow compare=true
 ```
 
-`just benchmark` remains a compatibility alias for `just benchmark-smoke`.
+`mode=fast` maps to the smoke workload. `mode=slow` maps to the standard
+workload. Set `compare=true` to add Open3D rows to the same output artifact.
 
 | Mode | Purpose | Workload |
 |---|---|---|
@@ -47,12 +48,13 @@ just benchmark-full
 The pytest option behind the recipes is:
 
 ```bash
-uv run pytest tests/test_benchmark.py -v -s --run-slow --benchmark-mode=smoke --no-cov
+uv run --group benchmark pytest tests/test_open3d_benchmark.py -v -s --run-slow --benchmark-mode=smoke --benchmark-json=reports/benchmarks/last-benchmark.json --no-cov
 ```
 
 `--benchmark-mode` accepts `smoke`, `standard`, or `full` and defaults to
-`smoke`. Benchmark tests are still marked `slow`, so normal test runs continue
-to skip them unless `--run-slow` or a benchmark recipe is used.
+`smoke`; the public `just` entry intentionally exposes only `fast` and `slow`.
+Benchmark tests are still marked `slow`, so normal test runs continue to skip
+them unless `--run-slow` or a benchmark recipe is used.
 
 ## Matrices
 
@@ -117,14 +119,14 @@ The CSV columns follow RFC-0009 section 3.3:
 | `device_name` | Public `PointCloud.device()` value for the result. |
 | `git_sha` | Git commit SHA or `GITHUB_SHA`. |
 
-Run `just benchmark-docs` after a recorded benchmark run to regenerate this
-page from CSV output.
+Run `just benchmark-visualize` after a recorded benchmark run to render the
+latest JSON output.
 
 ## CI Behavior
 
-GitHub Actions runs `just benchmark-smoke` for pull requests and normal CI. A
-manual workflow dispatch can select `smoke`, `standard`, or `full` through the
-`benchmark_mode` input. Standard and full modes also require
+GitHub Actions runs `just benchmark mode=fast compare=false` for pull requests
+and normal CI. A manual workflow dispatch can select `fast` or `slow` through
+the `benchmark_mode` input. Slow mode also requires
 `allow_expensive_benchmarks=true` so they are not launched accidentally on
 hosted runners.
 
@@ -137,5 +139,5 @@ hundreds of GB depending on allocator behavior and backend implementation.
 ## Recorded Results
 
 No recorded benchmark CSV files were found under `reports/benchmarks/`.
-Run one of the benchmark recipes, then run `just benchmark-docs` to refresh
-this section from measured output.
+Run `just benchmark mode=fast compare=false`, then run `just benchmark-visualize`
+to render the latest measured output.

@@ -221,8 +221,9 @@ just dist             # 构建源码和 wheel 分发包
 
 ```bash
 just test             # 运行所有测试
-just test-fast        # 快速测试（跳过慢速测试）
-just benchmark        # 运行性能基准测试
+just benchmark mode=fast compare=false   # 快速基准，仅 pcl-rustic
+just benchmark mode=slow compare=true    # 慢速基准，包含 Open3D 对比
+just benchmark-visualize                 # 渲染最近一次基准结果
 just test-rust        # 仅运行 Rust 测试
 ```
 
@@ -284,8 +285,12 @@ just pre-commit       # 运行所有检查
 项目包含完整的性能基准测试，使用高斯分布生成真实点云数据：
 
 ```bash
-just benchmark
+just benchmark mode=fast compare=false
+just benchmark mode=slow compare=true
+just benchmark-visualize
 ```
+
+所有基准模式都写入统一的 `reports/benchmarks/last-benchmark.json`。可视化命令读取同一个文件；当 `compare=true` 时图表包含 Open3D 结果，当 `compare=false` 时只包含 pcl-rustic 结果。
 
 **典型性能（MacBook M1）**：
 

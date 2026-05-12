@@ -432,10 +432,10 @@ pc = PointCloud.from_xyz(xyz)
 
 ## 性能证据
 
-本仓库不发布未记录产物的性能数字。运行 `just benchmark-smoke`、
-`just benchmark-standard` 或 `just benchmark-full` 后，使用
-`just benchmark-docs` 从 CSV 产物刷新 `docs/performance/benchmarks.md`。
-标准和完整基准应记录 commit、硬件、驱动、后端、数据集或 fixture hash、命令、
+本仓库不发布未记录产物的性能数字。运行
+`just benchmark mode=fast compare=false` 或
+`just benchmark mode=slow compare=true` 后，使用 `just benchmark-visualize`
+从统一 JSON 产物生成图表。慢速基准应记录 commit、硬件、驱动、后端、数据集或 fixture hash、命令、
 输出点数、wall time 和吞吐量。
 
 如果本地性能不符合预期，请先保存 benchmark CSV，再参考本指南检查数据类型、

@@ -85,6 +85,46 @@ def _write_pytest_benchmark_json(path: Path) -> None:
                 "stats": {"mean": 0.005},
             },
             {
+                "name": "pcl_rustic__voxel_downsample__smoke__N10000",
+                "fullname": "tests/test_open3d_benchmark.py::test_pcl_large",
+                "group": "voxel_downsample",
+                "params": {
+                    "library": "pcl_rustic",
+                    "operation": "voxel_downsample",
+                    "case_id": "smoke-10000",
+                    "point_count": 10000,
+                    "output_points": 1200,
+                    "comparable": True,
+                    "git_sha": "abc123",
+                    "open3d_version": "0.19.0",
+                    "pcl_rustic_version": "0.1.0",
+                },
+                "stats": {
+                    "mean": 0.09,
+                    "stddev": 0.005,
+                },
+            },
+            {
+                "name": "open3d__voxel_downsample__smoke__N10000",
+                "fullname": "tests/test_open3d_benchmark.py::test_open3d_large",
+                "group": "voxel_downsample",
+                "params": {
+                    "library": "open3d",
+                    "operation": "voxel_downsample",
+                    "case_id": "smoke-10000",
+                    "point_count": 10000,
+                    "output_points": 1180,
+                    "comparable": True,
+                    "git_sha": "abc123",
+                    "open3d_version": "0.19.0",
+                    "pcl_rustic_version": "0.1.0",
+                },
+                "stats": {
+                    "mean": 0.22,
+                    "stddev": 0.01,
+                },
+            },
+            {
                 "name": "pcl_rustic__typed_concat__smoke__N1000",
                 "fullname": "tests/test_open3d_benchmark.py::test_pcl_only",
                 "group": "typed_concat",
@@ -106,7 +146,7 @@ def _write_pytest_benchmark_json(path: Path) -> None:
 
 
 def test_reads_pytest_benchmark_records(tmp_path: Path) -> None:
-    json_path = tmp_path / "open3d-comparison-smoke.json"
+    json_path = tmp_path / "last-benchmark.json"
     _write_pytest_benchmark_json(json_path)
 
     records = read_benchmark_records([json_path])
@@ -116,6 +156,8 @@ def test_reads_pytest_benchmark_records(tmp_path: Path) -> None:
         "open3d",
         "pcl_rustic",
         "pcl_rustic",
+        "open3d",
+        "pcl_rustic",
     ]
     assert records[0].operation == "voxel_downsample"
     assert records[0].point_count == 1000
@@ -124,11 +166,11 @@ def test_reads_pytest_benchmark_records(tmp_path: Path) -> None:
     assert records[2].operation == "transform"
     assert records[2].output_points == 1000
     assert records[2].git_sha == "abc123"
-    assert records[3].comparison_status == "pcl_rustic_only"
+    assert records[5].comparison_status == "pcl_rustic_only"
 
 
 def test_summary_rows_include_speedup_and_exclusions(tmp_path: Path) -> None:
-    json_path = tmp_path / "open3d-comparison-smoke.json"
+    json_path = tmp_path / "last-benchmark.json"
     _write_pytest_benchmark_json(json_path)
     records = read_benchmark_records([json_path])
 
@@ -146,9 +188,13 @@ def test_summary_rows_include_speedup_and_exclusions(tmp_path: Path) -> None:
     assert exclusion["comparison_status"] == "pcl_rustic_only"
     assert exclusion["not_comparable_reason"] == "Open3D has no typed strict concat."
 
+    pcl_only = next(row for row in rows if row["operation"] == "transform")
+    assert pcl_only["comparison_status"] == "pcl_rustic_only"
+    assert pcl_only["open3d_mean_s"] == ""
+
 
 def test_writes_summary_csv(tmp_path: Path) -> None:
-    json_path = tmp_path / "open3d-comparison-smoke.json"
+    json_path = tmp_path / "last-benchmark.json"
     csv_path = tmp_path / "summary.csv"
     _write_pytest_benchmark_json(json_path)
 
@@ -163,22 +209,27 @@ def test_writes_summary_csv(tmp_path: Path) -> None:
 
 def test_runtime_chart_uses_shared_error_bar_axes(tmp_path: Path) -> None:
     plotly = pytest.importorskip("plotly.graph_objects")
-    json_path = tmp_path / "open3d-comparison-smoke.json"
+    colors = pytest.importorskip("plotly.colors")
+    json_path = tmp_path / "last-benchmark.json"
     _write_pytest_benchmark_json(json_path)
     rows = build_summary_rows(read_benchmark_records([json_path]))
 
-    figure = build_runtime_error_bar_figure(
-        [row for row in rows if row["comparison_status"] == "comparable"],
-        plotly,
-    )
+    figure = build_runtime_error_bar_figure(rows, plotly)
 
-    assert len(figure.data) == 3
-    assert figure.layout.xaxis.type == "log"
-    assert figure.layout.xaxis.tickvals == tuple(range(1000, 10001, 1000))
+    assert len(figure.data) == 4
+    assert figure.layout.xaxis.title.text == "operation"
+    assert figure.layout.xaxis2.title.text == "operation"
     assert figure.layout.yaxis.type == "log"
-    voxel_traces = [
-        trace for trace in figure.data if trace.name.startswith("voxel_downsample")
-    ]
-    assert {trace.marker.color for trace in voxel_traces} == {"blue", "red"}
-    assert all(trace.error_y.visible for trace in voxel_traces)
-    assert all(trace.error_y.array for trace in voxel_traces)
+    assert "10,000 points" in figure.layout.annotations[1].text
+    assert {trace.marker.color for trace in figure.data} == set(
+        colors.qualitative.Plotly[:2]
+    )
+    assert {trace.mode for trace in figure.data} == {"markers"}
+    assert {trace.type for trace in figure.data} == {"scatter"}
+    assert set(figure.data[0].x) == {
+        "transform",
+        "typed_concat",
+        "voxel_downsample",
+    }
+    assert all(trace.error_y.visible for trace in figure.data)
+    assert all(trace.error_y.array for trace in figure.data)

@@ -23,27 +23,9 @@ impl HighPerformancePointCloud {
             ));
         }
 
-        let xyz = self.get_xyz_vec();
-        let hits = self
+        let mean_distances = self
             .kdtree()?
-            .knn(&xyz, (nb_neighbors + 1).min(self.point_count()))?;
-        let mean_distances: Vec<f32> = hits
-            .into_iter()
-            .enumerate()
-            .map(|(i, row)| {
-                let distances: Vec<f32> = row
-                    .into_iter()
-                    .filter(|hit| hit.index as usize != i)
-                    .take(nb_neighbors)
-                    .map(|hit| hit.distance)
-                    .collect();
-                if distances.is_empty() {
-                    0.0
-                } else {
-                    distances.iter().sum::<f32>() / distances.len() as f32
-                }
-            })
-            .collect();
+            .knn_mean_distances_for_index_points(nb_neighbors)?;
 
         let mean = mean_distances.iter().sum::<f32>() / mean_distances.len() as f32;
         let variance = mean_distances
@@ -75,19 +57,7 @@ impl HighPerformancePointCloud {
                 "nb_points must be greater than zero".to_string(),
             ));
         }
-        let xyz = self.get_xyz_vec();
-        let hits = self.kdtree()?.radius_search(&xyz, radius)?;
-        let kept_mask: Vec<bool> = hits
-            .into_iter()
-            .enumerate()
-            .map(|(i, row)| {
-                row.into_iter()
-                    .filter(|hit| hit.index as usize != i)
-                    .take(nb_points)
-                    .count()
-                    >= nb_points
-            })
-            .collect();
+        let kept_mask = self.kdtree()?.radius_self_has_at_least(radius, nb_points)?;
         let filtered = self.select_mask(&kept_mask)?;
         Ok((filtered, kept_mask))
     }

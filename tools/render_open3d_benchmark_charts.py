@@ -1,4 +1,4 @@
-"""Render RFC-0015 Open3D comparison charts from pytest-benchmark JSON."""
+"""Render benchmark charts from the unified pytest-benchmark JSON."""
 
 from __future__ import annotations
 
@@ -63,18 +63,18 @@ def parse_args() -> argparse.Namespace:
         "--json-dir",
         type=Path,
         default=Path("reports/benchmarks"),
-        help="Directory searched for open3d-comparison-*.json when no JSON path is given.",
+        help="Directory searched for last-benchmark.json when no JSON path is given.",
     )
     parser.add_argument(
         "--html-output",
         type=Path,
-        default=Path("reports/benchmarks/open3d-comparison.html"),
+        default=Path("reports/benchmarks/last-benchmark.html"),
         help="Interactive Plotly HTML output path.",
     )
     parser.add_argument(
         "--summary-output",
         type=Path,
-        default=Path("reports/benchmarks/open3d-comparison-summary.csv"),
+        default=Path("reports/benchmarks/last-benchmark-summary.csv"),
         help="Summary CSV output path.",
     )
     return parser.parse_args()
@@ -148,13 +148,18 @@ def _summary_row(records: list[BenchmarkRecord]) -> dict[str, str]:
     status_record = next(
         (record for record in records if not record.comparable), anchor
     )
-    status = (
-        "comparable"
-        if pcl is not None
+    if (
+        pcl is not None
         and open3d is not None
         and all(record.comparable for record in records)
-        else status_record.comparison_status
-    )
+    ):
+        status = "comparable"
+    elif pcl is not None and open3d is None and pcl.comparable:
+        status = "pcl_rustic_only"
+    elif open3d is not None and pcl is None and open3d.comparable:
+        status = "open3d_only"
+    else:
+        status = status_record.comparison_status
     speedup = ""
     if (
         status == "comparable"
@@ -214,19 +219,18 @@ def write_plotly_html(path: Path, rows: list[dict[str, str]]) -> None:
             "Plotly is required for chart rendering. Install the benchmark dependency group."
         ) from exc
 
-    comparable_rows = [row for row in rows if row["comparison_status"] == "comparable"]
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not comparable_rows:
+    if not rows:
         path.write_text(
-            "<html><body><h1>No comparable benchmark rows</h1></body></html>",
+            "<html><body><h1>No benchmark rows to visualize</h1></body></html>",
             encoding="utf-8",
         )
         return
 
-    runtime_fig = build_runtime_error_bar_figure(comparable_rows, go)
+    runtime_fig = build_runtime_error_bar_figure(rows, go)
     html = "\n".join(
         [
-            "<html><body><h1>Open3D Comparison Benchmarks</h1>",
+            "<html><body><h1>PCL Rustic Benchmarks</h1>",
             runtime_fig.to_html(full_html=False, include_plotlyjs="cdn"),
             "</body></html>",
         ]
@@ -235,47 +239,46 @@ def write_plotly_html(path: Path, rows: list[dict[str, str]]) -> None:
 
 
 def build_runtime_error_bar_figure(rows: list[dict[str, str]], go_module: Any):
-    colors = {"pcl_rustic": "blue", "open3d": "red"}
-    symbols = (
-        "circle",
-        "square",
-        "diamond",
-        "cross",
-        "x",
-        "triangle-up",
-        "triangle-down",
-        "star",
-        "hexagon",
-        "pentagon",
-    )
+    from plotly.colors import qualitative
+    from plotly.subplots import make_subplots
+
+    colorway = qualitative.Plotly
+    colors = {"pcl_rustic": colorway[0], "open3d": colorway[1]}
+    symbols = {"pcl_rustic": "circle", "open3d": "diamond"}
+    point_counts = sorted({int(row["point_count"]) for row in rows})
     operations = sorted({row["operation"] for row in rows})
-    symbol_by_operation = {
-        operation: symbols[index % len(symbols)]
-        for index, operation in enumerate(operations)
-    }
-    fig = go_module.Figure()
-    for operation in operations:
-        operation_rows = [row for row in rows if row["operation"] == operation]
+
+    fig = make_subplots(
+        rows=1,
+        cols=len(point_counts),
+        shared_yaxes=True,
+        subplot_titles=[f"{point_count:,} points" for point_count in point_counts],
+        horizontal_spacing=0.04,
+    )
+
+    for col, point_count in enumerate(point_counts, start=1):
+        point_rows = [row for row in rows if int(row["point_count"]) == point_count]
         for library in ("pcl_rustic", "open3d"):
             mean_column = f"{library}_mean_s"
             stddev_column = f"{library}_stddev_s"
             library_rows = [
-                row for row in operation_rows if row.get(mean_column) not in ("", None)
+                row for row in point_rows if row.get(mean_column) not in ("", None)
             ]
             if not library_rows:
                 continue
-            library_rows.sort(key=lambda row: int(row["point_count"]))
+            library_rows.sort(key=lambda row: operations.index(row["operation"]))
             fig.add_trace(
                 go_module.Scatter(
-                    x=[int(row["point_count"]) for row in library_rows],
+                    x=[row["operation"] for row in library_rows],
                     y=[float(row[mean_column]) for row in library_rows],
                     mode="markers",
-                    name=f"{operation} / {library}",
+                    name=library,
                     legendgroup=library,
+                    showlegend=col == 1,
                     marker={
                         "color": colors[library],
-                        "symbol": symbol_by_operation[operation],
-                        "size": 9,
+                        "symbol": symbols[library],
+                        "size": 10,
                     },
                     error_y={
                         "type": "data",
@@ -289,40 +292,49 @@ def build_runtime_error_bar_figure(rows: list[dict[str, str]], go_module: Any):
                         "width": 3,
                     },
                     customdata=[
-                        [row["case_id"], row["git_sha"], row["source_json"]]
+                        [
+                            row["operation"],
+                            row["case_id"],
+                            row["git_sha"],
+                            row["source_json"],
+                        ]
                         for row in library_rows
                     ],
                     hovertemplate=(
-                        "operation=%{meta}<br>"
+                        "operation=%{customdata[0]}<br>"
                         f"library={library}<br>"
-                        "point_count=%{x}<br>"
+                        f"point_count={point_count}<br>"
                         "mean_s=%{y:.6f}<br>"
-                        "case_id=%{customdata[0]}<br>"
-                        "git_sha=%{customdata[1]}<br>"
-                        "source_json=%{customdata[2]}<extra></extra>"
+                        "case_id=%{customdata[1]}<br>"
+                        "git_sha=%{customdata[2]}<br>"
+                        "source_json=%{customdata[3]}<extra></extra>"
                     ),
-                    meta=operation,
-                )
+                ),
+                row=1,
+                col=col,
             )
+        fig.update_xaxes(
+            title_text="operation",
+            categoryorder="array",
+            categoryarray=operations,
+            tickangle=-45,
+            row=1,
+            col=col,
+        )
 
     fig.update_layout(
-        title="Runtime vs point count with pytest-benchmark error bars",
-        xaxis_title="point_count",
+        title="Runtime by operation and point-count scale",
         yaxis_title="mean_s",
-        legend_title="operation / library",
-    )
-    fig.update_xaxes(
-        type="log",
-        tickmode="array",
-        tickvals=list(range(1000, 10001, 1000)),
-        ticktext=[str(value) for value in range(1000, 10001, 1000)],
+        legend_title="library",
+        colorway=colorway,
     )
     fig.update_yaxes(type="log")
     return fig
 
 
 def discover_json_paths(json_dir: Path) -> list[Path]:
-    return sorted(json_dir.glob("open3d-comparison-*.json"))
+    path = json_dir / "last-benchmark.json"
+    return [path] if path.exists() else []
 
 
 def main() -> None:

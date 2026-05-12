@@ -47,6 +47,12 @@ def pytest_addoption(parser):
         choices=("smoke", "standard", "full"),
         help="Benchmark suite scope: smoke, standard, or full (default: smoke)",
     )
+    parser.addoption(
+        "--benchmark-compare-open3d",
+        action="store_true",
+        default=False,
+        help="Include Open3D rows in the unified benchmark JSON output.",
+    )
 
 
 def pytest_collection_modifyitems(config, items):

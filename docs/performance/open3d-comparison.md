@@ -1,8 +1,8 @@
-# Open3D Comparison Benchmarks
+# Unified Benchmarks
 
-RFC-0015 adds a comparison benchmark suite for pcl-rustic and Open3D. It uses
-pytest-benchmark for measurement and Plotly only for rendering charts from
-recorded benchmark JSON artifacts.
+The benchmark suite uses one pytest-benchmark JSON format for both pcl-rustic
+only runs and Open3D comparison runs. Plotly renders charts from the same latest
+artifact in either mode.
 
 ## Scope
 
@@ -23,53 +23,54 @@ LAS point-format-10 policy behavior, are excluded from speedup-ratio charts.
 
 ## Commands
 
-Install the optional benchmark dependency group before running comparison
-benchmarks:
+Install the optional benchmark dependency group before running benchmarks:
 
 ```bash
 uv sync --group benchmark
 ```
 
-Run the suites through `just`:
+Run the suite through `just`:
 
 ```bash
-just benchmark-compare-smoke
-just benchmark-compare-standard
-just benchmark-compare-full
+just benchmark mode=fast compare=false
+just benchmark mode=fast compare=true
+just benchmark mode=slow compare=false
+just benchmark mode=slow compare=true
 ```
 
-The recipes write pytest-benchmark JSON under `reports/benchmarks/`:
+The recipe writes the latest pytest-benchmark JSON to one stable path:
 
 ```text
-reports/benchmarks/open3d-comparison-smoke.json
-reports/benchmarks/open3d-comparison-standard.json
-reports/benchmarks/open3d-comparison-full.json
+reports/benchmarks/last-benchmark.json
 ```
 
-Generate charts from existing JSON artifacts:
+Generate charts from the latest JSON artifact:
 
 ```bash
-just benchmark-compare-charts
+just benchmark-visualize
 ```
 
 The renderer writes:
 
 ```text
-reports/benchmarks/open3d-comparison.html
-reports/benchmarks/open3d-comparison-summary.csv
+reports/benchmarks/last-benchmark.html
+reports/benchmarks/last-benchmark-summary.csv
 ```
+
+The HTML chart uses one subplot per point-count scale. Each subplot's x-axis is
+the operation name, and library results are shown as colored point markers with
+error bars.
 
 ## Modes
 
-| Mode | Point counts | Use |
-|---|---|---|
-| `smoke` | 1k, 10k | Validates benchmark wiring and chart generation. |
-| `standard` | 10k, 100k, 1M | Routine comparison on benchmark-capable machines. |
-| `full` | 10k, 100k, 1M, 10M | Release comparison on recorded benchmark hardware. |
+| Just mode | Pytest mode | Point counts | Use |
+|---|---|---|---|
+| `fast` | `smoke` | 1k, 10k | Validates benchmark wiring and chart generation. |
+| `slow` | `standard` | 10k, 100k, 1M | Routine benchmark runs on benchmark-capable machines. |
 
-Normal tests do not require Open3D, Plotly, or pytest-benchmark. The benchmark
-module is marked `slow`, skips without `--run-slow`, and skips with clear
-reasons when optional dependencies are absent.
+Normal tests do not require Open3D, Plotly, or pytest-benchmark. `compare=false`
+does not import Open3D. `compare=true` adds Open3D rows and skips with a clear
+reason if the optional dependency is absent.
 
 ## Evidence Rules
 

@@ -25,6 +25,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyNormalSearch>()?;
     m.add_class::<PyOctree>()?;
     m.add_function(wrap_pyfunction!(py_has_wgpu_device, m)?)?;
+    m.add_function(wrap_pyfunction!(py_rayon_current_num_threads, m)?)?;
     let reg = PyModule::new(m.py(), "registration")?;
     reg.add_class::<PyICPConvergenceCriteria>()?;
     reg.add_class::<PyTransformationEstimation>()?;
@@ -38,6 +39,11 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pyfunction(name = "has_wgpu_device")]
 fn py_has_wgpu_device() -> bool {
     crate::utils::tensor::has_wgpu_device()
+}
+
+#[pyfunction(name = "rayon_current_num_threads")]
+fn py_rayon_current_num_threads() -> usize {
+    rayon::current_num_threads()
 }
 
 #[pyclass(name = "PointCloud")]

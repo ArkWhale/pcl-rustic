@@ -71,6 +71,12 @@ def comparable_operations() -> tuple[str, ...]:
     )
 
 
+def benchmark_libraries(config: pytest.Config) -> tuple[str, ...]:
+    if config.getoption("--benchmark-compare-open3d"):
+        return LIBRARIES
+    return ("pcl_rustic",)
+
+
 def benchmark_mode(request: pytest.FixtureRequest) -> str:
     return str(request.config.getoption("--benchmark-mode"))
 
@@ -81,6 +87,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         return
 
     mode = str(metafunc.config.getoption("--benchmark-mode"))
+    libraries = benchmark_libraries(metafunc.config)
     params = [
         pytest.param(
             operation,
@@ -89,7 +96,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             id=f"{library}-{operation}-{case.case_id}",
         )
         for operation in comparable_operations()
-        for library in LIBRARIES
+        for library in libraries
         for case in comparison_cases(mode)
     ]
     metafunc.parametrize(("operation", "library", "case"), params)
@@ -196,6 +203,17 @@ def attach_metadata(benchmark: Any, metadata: dict[str, Any]) -> None:
         extra_info.update(metadata)
 
 
+def pcl_neighbor_execution_metadata(cloud: PointCloud) -> dict[str, Any]:
+    threads = pcl_rustic.rayon_current_num_threads()
+    return {
+        "execution_backend": "cpu_rayon",
+        "thread_count": threads,
+        "rayon_current_num_threads": threads,
+        "gpu_accelerated": False,
+        "storage_device": cloud.device(),
+    }
+
+
 def benchmark_fresh_input(
     benchmark: Any,
     setup: Callable[[], Any],
@@ -225,12 +243,11 @@ def assert_transform_equivalent(before: np.ndarray, after: np.ndarray) -> None:
 def test_open3d_comparison_benchmark(
     request: pytest.FixtureRequest,
     benchmark_runner,
-    open3d_module,
     operation: str,
     library: str,
     case: ComparisonCase,
 ) -> None:
-    o3d = open3d_module
+    o3d = request.getfixturevalue("open3d_module") if library == "open3d" else None
     output_points, extra = run_operation(
         benchmark_runner,
         o3d,
@@ -364,6 +381,7 @@ def run_neighbors(
                 lambda cloud=cloud, query=query: cloud.radius_search(query, RADIUS)
             )
             output_points = sum(len(indices) for indices in result)
+        extra = pcl_neighbor_execution_metadata(cloud)
     else:
         cloud = make_open3d_cloud(o3d, xyz)
         tree = o3d.geometry.KDTreeFlann(cloud)
@@ -382,11 +400,13 @@ def run_neighbors(
 
             result = benchmark(run_radius)
         output_points = sum(len(indices) for indices in result)
+        extra = {}
     return output_points, {
         "query_count": len(query),
         "neighbors": KNN_K if operation == "knn_warm" else "",
         "radius": RADIUS if operation == "radius_search_warm" else "",
         "cache_policy": "warm",
+        **extra,
     }
 
 
@@ -450,6 +470,7 @@ def run_outliers(
                 lambda cloud: cloud.remove_radius_outlier(**method_args)[0],
             )
         output_points = result.point_count()
+        extra = pcl_neighbor_execution_metadata(result)
     else:
         if operation == "remove_statistical_outlier":
             result = benchmark_fresh_input(
@@ -464,8 +485,9 @@ def run_outliers(
                 lambda cloud: cloud.remove_radius_outlier(**method_args)[0],
             )
         output_points = len(result.points)
+        extra = {}
     assert 0 < output_points <= case.point_count
-    return output_points, {**method_args, "cache_policy": "none"}
+    return output_points, {**method_args, "cache_policy": "none", **extra}
 
 
 def run_registration(
@@ -506,6 +528,7 @@ def run_registration(
             )
         )
         output_points = len(result.correspondence_set)
+        extra = pcl_neighbor_execution_metadata(source)
     else:
         source = make_open3d_cloud(o3d, source_xyz)
         target = make_open3d_cloud(o3d, target_xyz)
@@ -536,7 +559,9 @@ def run_registration(
             )
         )
         output_points = len(result.correspondence_set)
+        extra = {}
     return output_points, {
         "estimator": operation.replace("registration_", ""),
         "cache_policy": "warm",
+        **extra,
     }

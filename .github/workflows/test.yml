@@ -9,16 +9,15 @@ on:
   workflow_dispatch:
     inputs:
       benchmark_mode:
-        description: "RFC-0009 benchmark mode for the benchmark job"
+        description: "Benchmark mode for the benchmark job"
         required: false
-        default: smoke
+        default: fast
         type: choice
         options:
-          - smoke
-          - standard
-          - full
+          - fast
+          - slow
       allow_expensive_benchmarks:
-        description: "Allow standard/full benchmarks on this runner"
+        description: "Allow slow benchmarks on this runner"
         required: false
         default: false
         type: boolean
@@ -361,13 +360,13 @@ jobs:
       - name: Run benchmarks
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            if [ "${{ inputs.benchmark_mode }}" != "smoke" ] && [ "${{ inputs.allow_expensive_benchmarks }}" != "true" ]; then
-              echo "standard/full benchmarks require allow_expensive_benchmarks=true and a high-memory runner"
+            if [ "${{ inputs.benchmark_mode }}" = "slow" ] && [ "${{ inputs.allow_expensive_benchmarks }}" != "true" ]; then
+              echo "slow benchmarks require allow_expensive_benchmarks=true and a high-memory runner"
               exit 1
             fi
-            just benchmark-${{ inputs.benchmark_mode }}
+            just benchmark mode=${{ inputs.benchmark_mode }} compare=false
           else
-            just benchmark-smoke
+            just benchmark mode=fast compare=false
           fi
 
       - name: Upload benchmark results
@@ -376,7 +375,9 @@ jobs:
         with:
           name: benchmark-results-rfc0009
           path: |
-            reports/benchmarks/*.csv
+            reports/benchmarks/last-benchmark.json
+            reports/benchmarks/last-benchmark*.csv
+            reports/benchmarks/last-benchmark*.html
           retention-days: 30
           if-no-files-found: ignore
 
