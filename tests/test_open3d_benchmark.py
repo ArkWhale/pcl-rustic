@@ -11,7 +11,7 @@ import importlib.metadata
 import platform
 import subprocess
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 
 import numpy as np
 import pytest
@@ -30,6 +30,14 @@ KNN_K = 16
 RADIUS = 0.35
 OUTLIER_NEIGHBORS = 12
 REGISTRATION_POINTS_CAP = 10_000
+
+
+class BenchmarkConfig(Protocol):
+    def getoption(self, name: str) -> Any: ...
+
+
+class DeviceCloud(Protocol):
+    def device(self) -> str: ...
 
 
 @dataclass(frozen=True)
@@ -71,7 +79,7 @@ def comparable_operations() -> tuple[str, ...]:
     )
 
 
-def benchmark_libraries(config: pytest.Config) -> tuple[str, ...]:
+def benchmark_libraries(config: BenchmarkConfig) -> tuple[str, ...]:
     if config.getoption("--benchmark-compare-open3d"):
         return LIBRARIES
     return ("pcl_rustic",)
@@ -203,7 +211,7 @@ def attach_metadata(benchmark: Any, metadata: dict[str, Any]) -> None:
         extra_info.update(metadata)
 
 
-def pcl_neighbor_execution_metadata(cloud: PointCloud) -> dict[str, Any]:
+def pcl_neighbor_execution_metadata(cloud: DeviceCloud) -> dict[str, Any]:
     threads = pcl_rustic.rayon_current_num_threads()
     return {
         "execution_backend": "cpu_rayon",

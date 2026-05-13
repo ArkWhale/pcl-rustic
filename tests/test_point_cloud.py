@@ -7,9 +7,11 @@ pcl_rustic 点云库的 pytest 测试用例
 import importlib.util
 import math
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 
 from pcl_rustic import (
     DownsampleStrategy,
@@ -18,6 +20,19 @@ from pcl_rustic import (
     has_wgpu_device,
     registration,
 )
+
+NumericArray = NDArray[Any]
+RgbArrays = tuple[NumericArray, NumericArray, NumericArray]
+
+
+def require_array(value: NumericArray | None) -> NumericArray:
+    assert value is not None
+    return value
+
+
+def require_rgb(value: RgbArrays | None) -> RgbArrays:
+    assert value is not None
+    return value
 
 
 def load_example_function(script_name: str, function_name: str):
@@ -87,7 +102,9 @@ class TestPointCloudProperties:
         pc.set_intensity(intensity)
 
         assert pc.has_intensity()
-        np.testing.assert_array_almost_equal(pc.get_intensity(), intensity)
+        np.testing.assert_array_almost_equal(
+            require_array(pc.get_intensity()), intensity
+        )
 
     def test_set_rgb(self):
         """测试设置 RGB"""
@@ -113,7 +130,9 @@ class TestPointCloudProperties:
         pc.add_attribute("confidence", attr_data)
 
         assert "confidence" in pc.attribute_names()
-        np.testing.assert_array_almost_equal(pc.get_attribute("confidence"), attr_data)
+        np.testing.assert_array_almost_equal(
+            require_array(pc.get_attribute("confidence")), attr_data
+        )
 
     def test_typed_attributes_round_trip(self):
         xyz = np.arange(12, dtype=np.float32).reshape(4, 3)
@@ -134,25 +153,31 @@ class TestPointCloudProperties:
         }
         for name, data in values.items():
             pc.set_attribute(name, data)
-            out = pc.get_attribute(name)
+            out = require_array(pc.get_attribute(name))
             assert out.dtype == data.dtype
             np.testing.assert_array_equal(out, data)
 
         selected = pc.select(np.array([True, False, True, False], dtype=np.bool_))
         np.testing.assert_array_equal(
-            selected.get_attribute("wavepacket_offset"),
+            require_array(selected.get_attribute("wavepacket_offset")),
             values["wavepacket_offset"][[0, 2]],
         )
         np.testing.assert_array_equal(
-            selected.get_attribute("scan_angle_raw"),
+            require_array(selected.get_attribute("scan_angle_raw")),
             values["scan_angle_raw"][[0, 2]],
         )
 
         concatenated = PointCloud.concatenate([selected, selected], "strict")
-        assert concatenated.get_attribute("wavepacket_offset").dtype == np.uint64
-        assert concatenated.get_attribute("scan_angle_raw").dtype == np.int16
+        assert (
+            require_array(concatenated.get_attribute("wavepacket_offset")).dtype
+            == np.uint64
+        )
+        assert (
+            require_array(concatenated.get_attribute("scan_angle_raw")).dtype
+            == np.int16
+        )
         np.testing.assert_array_equal(
-            concatenated.get_attribute("wavepacket_offset"),
+            require_array(concatenated.get_attribute("wavepacket_offset")),
             np.concatenate(
                 [
                     values["wavepacket_offset"][[0, 2]],
@@ -163,7 +188,7 @@ class TestPointCloudProperties:
 
         covariance = np.arange(24, dtype=np.float32).reshape(4, 6)
         pc.set_attribute("covariance", covariance)
-        out_covariance = pc.get_attribute("covariance")
+        out_covariance = require_array(pc.get_attribute("covariance"))
         assert out_covariance.dtype == np.float32
         assert out_covariance.shape == (4, 6)
         np.testing.assert_array_equal(out_covariance, covariance)
@@ -175,7 +200,7 @@ class TestPointCloudProperties:
         }
         pc = PointCloud.from_numpy(data)
         np.testing.assert_array_equal(
-            pc.get_attribute("classification"), data["classification"]
+            require_array(pc.get_attribute("classification")), data["classification"]
         )
 
     def test_add_duplicate_attribute_fails(self):
@@ -196,7 +221,9 @@ class TestPointCloudProperties:
         pc.add_attribute("test", np.array([1.0], dtype=np.float32))
         pc.set_attribute("test", np.array([2.0], dtype=np.float32))
 
-        np.testing.assert_array_almost_equal(pc.get_attribute("test"), [2.0])
+        np.testing.assert_array_almost_equal(
+            require_array(pc.get_attribute("test")), [2.0]
+        )
 
     def test_remove_attribute(self):
         """测试移除属性"""
@@ -387,20 +414,20 @@ class TestSelectionAndConcatenation:
         assert empty.point_count() == 0
         assert empty.get_xyz().shape == (0, 3)
         assert set(empty.attribute_names()) == {"classification", "gps_time"}
-        assert empty.get_attribute("classification").dtype == np.uint8
-        assert empty.get_attribute("gps_time").dtype == np.float64
-        assert empty.get_attribute("classification").shape == (0,)
-        assert empty.get_attribute("gps_time").shape == (0,)
+        assert require_array(empty.get_attribute("classification")).dtype == np.uint8
+        assert require_array(empty.get_attribute("gps_time")).dtype == np.float64
+        assert require_array(empty.get_attribute("classification")).shape == (0,)
+        assert require_array(empty.get_attribute("gps_time")).shape == (0,)
 
         concatenated = PointCloud.concatenate([empty, pc], "strict")
         assert concatenated.point_count() == pc.point_count()
         np.testing.assert_array_equal(
-            concatenated.get_attribute("classification"),
-            pc.get_attribute("classification"),
+            require_array(concatenated.get_attribute("classification")),
+            require_array(pc.get_attribute("classification")),
         )
         np.testing.assert_array_equal(
-            concatenated.get_attribute("gps_time"),
-            pc.get_attribute("gps_time"),
+            require_array(concatenated.get_attribute("gps_time")),
+            require_array(pc.get_attribute("gps_time")),
         )
 
 
@@ -481,7 +508,7 @@ class TestVoxelDownsample:
         pc.set_attribute("classification", np.array([2, 2, 6], dtype=np.uint8))
         down = pc.voxel_downsample(1.0, DownsampleStrategy.AVERAGE)
         assert down.point_count() == 2
-        assert down.get_attribute("classification").dtype == np.uint8
+        assert require_array(down.get_attribute("classification")).dtype == np.uint8
 
 
 class TestDeviceResidency:
@@ -536,7 +563,7 @@ class TestDeviceResidency:
 
         assert result.device() == expected_device
         assert result.point_count() == downsampled.point_count()
-        assert result.get_attribute("classification").dtype == np.uint8
+        assert require_array(result.get_attribute("classification")).dtype == np.uint8
         np.testing.assert_allclose(
             transformed.get_xyz(),
             downsampled.get_xyz() + np.array([1.0, 0.0, 0.0], dtype=np.float32),
@@ -587,11 +614,15 @@ class TestNeighborsNormalsOutliersRegistration:
 
         pc.estimate_normals(NormalSearch.knn(3))
         normals = np.column_stack(
-            [pc.get_attribute("nx"), pc.get_attribute("ny"), pc.get_attribute("nz")]
+            [
+                require_array(pc.get_attribute("nx")),
+                require_array(pc.get_attribute("ny")),
+                require_array(pc.get_attribute("nz")),
+            ]
         )
         np.testing.assert_allclose(np.linalg.norm(normals, axis=1), 1.0, atol=1e-5)
         pc.estimate_covariances(3)
-        cov = pc.get_attribute("covariance")
+        cov = require_array(pc.get_attribute("covariance"))
         assert cov.shape == (4, 6)
         assert cov.dtype == np.float32
         assert isinstance(pc.device(), str)
@@ -728,13 +759,21 @@ class TestTableIo:
 
         pc = PointCloud.from_las(str(path))
 
-        assert pc.get_attribute("intensity").dtype == np.uint16
-        assert pc.get_attribute("scan_angle").dtype == np.int16
-        assert pc.get_attribute("wavepacket_offset").dtype == np.uint64
-        np.testing.assert_array_equal(pc.get_attribute("intensity"), [65535, 42])
-        np.testing.assert_array_equal(pc.get_attribute("red"), [4096, 65535])
-        np.testing.assert_array_equal(pc.get_attribute("nir"), [111, 222])
-        np.testing.assert_array_equal(pc.get_attribute("scan_angle"), [-120, 120])
+        assert require_array(pc.get_attribute("intensity")).dtype == np.uint16
+        assert require_array(pc.get_attribute("scan_angle")).dtype == np.int16
+        assert require_array(pc.get_attribute("wavepacket_offset")).dtype == np.uint64
+        np.testing.assert_array_equal(
+            require_array(pc.get_attribute("intensity")), [65535, 42]
+        )
+        np.testing.assert_array_equal(
+            require_array(pc.get_attribute("red")), [4096, 65535]
+        )
+        np.testing.assert_array_equal(
+            require_array(pc.get_attribute("nir")), [111, 222]
+        )
+        np.testing.assert_array_equal(
+            require_array(pc.get_attribute("scan_angle")), [-120, 120]
+        )
 
     def test_las_fixture_backed_selectors_cover_standard_attributes(self, tmp_path):
         xyz = np.array(
@@ -853,25 +892,32 @@ class TestTableIo:
         np.testing.assert_array_equal(
             reloaded.get_attribute("number_of_returns"), number_of_returns[:4]
         )
-        np.testing.assert_allclose(reloaded.get_attribute("gps_time"), gps_time[:4])
-        np.testing.assert_array_equal(reloaded.get_rgb()[0], rgb[:4, 0])
+        np.testing.assert_allclose(
+            require_array(reloaded.get_attribute("gps_time")), gps_time[:4]
+        )
+        np.testing.assert_array_equal(require_rgb(reloaded.get_rgb())[0], rgb[:4, 0])
 
         filtered, mask = reloaded.remove_radius_outlier(nb_points=1, radius=0.2)
         second_path = tmp_path / "filtered.las"
         filtered.to_las(str(second_path))
         filtered_reloaded = PointCloud.from_las(str(second_path))
 
+        reloaded_classification = require_array(
+            reloaded.get_attribute("classification")
+        )
+        reloaded_return_number = require_array(reloaded.get_attribute("return_number"))
+        reloaded_gps_time = require_array(reloaded.get_attribute("gps_time"))
         np.testing.assert_array_equal(
-            filtered_reloaded.get_attribute("classification"),
-            reloaded.get_attribute("classification")[mask],
+            require_array(filtered_reloaded.get_attribute("classification")),
+            reloaded_classification[mask],
         )
         np.testing.assert_array_equal(
-            filtered_reloaded.get_attribute("return_number"),
-            reloaded.get_attribute("return_number")[mask],
+            require_array(filtered_reloaded.get_attribute("return_number")),
+            reloaded_return_number[mask],
         )
         np.testing.assert_allclose(
-            filtered_reloaded.get_attribute("gps_time"),
-            reloaded.get_attribute("gps_time")[mask],
+            require_array(filtered_reloaded.get_attribute("gps_time")),
+            reloaded_gps_time[mask],
         )
 
     def test_las_custom_attributes_survive_outlier_round_trip(self, tmp_path):
@@ -934,15 +980,26 @@ class TestTableIo:
         )
         reloaded = PointCloud.from_las(str(path))
 
-        assert reloaded.get_attribute("intensity").dtype == np.uint16
-        assert reloaded.get_attribute("scan_angle").dtype == np.int16
-        assert reloaded.get_attribute("wavepacket_offset").dtype == np.uint64
-        np.testing.assert_array_equal(reloaded.get_attribute("intensity"), [65535, 42])
-        np.testing.assert_array_equal(reloaded.get_attribute("red"), [4096, 65535])
-        np.testing.assert_array_equal(reloaded.get_attribute("nir"), [111, 222])
-        np.testing.assert_array_equal(reloaded.get_attribute("scan_angle"), [-120, 120])
+        assert require_array(reloaded.get_attribute("intensity")).dtype == np.uint16
+        assert require_array(reloaded.get_attribute("scan_angle")).dtype == np.int16
+        assert (
+            require_array(reloaded.get_attribute("wavepacket_offset")).dtype
+            == np.uint64
+        )
         np.testing.assert_array_equal(
-            reloaded.get_attribute("wavepacket_offset"),
+            require_array(reloaded.get_attribute("intensity")), [65535, 42]
+        )
+        np.testing.assert_array_equal(
+            require_array(reloaded.get_attribute("red")), [4096, 65535]
+        )
+        np.testing.assert_array_equal(
+            require_array(reloaded.get_attribute("nir")), [111, 222]
+        )
+        np.testing.assert_array_equal(
+            require_array(reloaded.get_attribute("scan_angle")), [-120, 120]
+        )
+        np.testing.assert_array_equal(
+            require_array(reloaded.get_attribute("wavepacket_offset")),
             [0, 0],
         )
 
@@ -984,13 +1041,16 @@ class TestTableIo:
         pc.to_las(str(path))
         reloaded = PointCloud.from_las(str(path))
 
-        assert reloaded.get_attribute("custom_offset").dtype == np.uint64
-        assert reloaded.get_attribute("custom_scan_angle").dtype == np.int16
-        np.testing.assert_array_equal(
-            reloaded.get_attribute("custom_offset"), [2**32 + 1, 2**40 + 7]
+        assert require_array(reloaded.get_attribute("custom_offset")).dtype == np.uint64
+        assert (
+            require_array(reloaded.get_attribute("custom_scan_angle")).dtype == np.int16
         )
         np.testing.assert_array_equal(
-            reloaded.get_attribute("custom_scan_angle"), [-120, 120]
+            require_array(reloaded.get_attribute("custom_offset")),
+            [2**32 + 1, 2**40 + 7],
+        )
+        np.testing.assert_array_equal(
+            require_array(reloaded.get_attribute("custom_scan_angle")), [-120, 120]
         )
 
     def test_csv_and_parquet_round_trip(self, tmp_path):
@@ -1011,14 +1071,18 @@ class TestTableIo:
         pc.to_csv(str(csv_path), delimiter=ord(","))
         csv_loaded = PointCloud.from_csv(str(csv_path), delimiter=ord(","))
         np.testing.assert_allclose(csv_loaded.get_xyz(), xyz)
-        np.testing.assert_allclose(csv_loaded.get_intensity(), intensity)
-        np.testing.assert_array_equal(csv_loaded.get_rgb()[0], rgb[:, 0])
+        np.testing.assert_allclose(require_array(csv_loaded.get_intensity()), intensity)
+        np.testing.assert_array_equal(require_rgb(csv_loaded.get_rgb())[0], rgb[:, 0])
 
         pc.to_parquet(str(parquet_path))
         parquet_loaded = PointCloud.from_parquet(str(parquet_path))
         np.testing.assert_allclose(parquet_loaded.get_xyz(), xyz)
-        np.testing.assert_allclose(parquet_loaded.get_intensity(), intensity)
-        np.testing.assert_array_equal(parquet_loaded.get_rgb()[1], rgb[:, 1])
+        np.testing.assert_allclose(
+            require_array(parquet_loaded.get_intensity()), intensity
+        )
+        np.testing.assert_array_equal(
+            require_rgb(parquet_loaded.get_rgb())[1], rgb[:, 1]
+        )
 
         pc.save_to_file(str(auto_path))
         auto_loaded = PointCloud.load_from_file(str(auto_path))

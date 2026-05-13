@@ -13,7 +13,7 @@ import platform
 import subprocess
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -286,7 +286,9 @@ def skip_reason(
         return f"standard/full benchmark requires accelerator, got {budget.device_name}"
     if budget.device_memory_bytes is None:
         return "accelerator memory is unknown"
-    if estimate.peak_device_bytes > int(budget.device_memory_bytes * DEVICE_BUDGET_FRACTION):
+    if estimate.peak_device_bytes > int(
+        budget.device_memory_bytes * DEVICE_BUDGET_FRACTION
+    ):
         return "estimated peak device bytes exceed accelerator budget"
     if estimate.max_single_allocation_bytes > int(
         budget.device_memory_bytes * SINGLE_ALLOCATION_FRACTION
@@ -403,11 +405,13 @@ def write_skip_row(
                     estimate.max_single_allocation_bytes
                 ),
                 "detected_device_memory_bytes": (
-                    "" if budget.device_memory_bytes is None else budget.device_memory_bytes
+                    ""
+                    if budget.device_memory_bytes is None
+                    else budget.device_memory_bytes
                 ),
                 "detected_device": budget.device_name,
                 "git_sha": git_sha(),
-                "run_date": datetime.now(UTC).date().isoformat(),
+                "run_date": datetime.now(timezone.utc).date().isoformat(),
             }
         )
 
@@ -579,7 +583,7 @@ class TestRFC0009BenchmarkSuite:
                 continue
 
             downsampled, voxel_time, voxel_rss = measure(
-                lambda pc=concatenated: pc.voxel_downsample(
+                lambda pc=concatenated, voxel_size=voxel_size: pc.voxel_downsample(
                     voxel_size,
                     DownsampleStrategy.NEAREST_TO_CENTROID,
                 )

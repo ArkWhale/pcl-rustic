@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import numpy as np
 import pytest
@@ -105,7 +105,7 @@ def _generate_gaussian_point_cloud(
     y_range: Tuple[float, float] = (-100, 250),
     z_range: Tuple[float, float] = (-3, 7),
     seed: Optional[int] = None,
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Any]:
     """
     生成高斯分布的点云数据
 
