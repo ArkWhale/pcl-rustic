@@ -31,6 +31,8 @@ def _write_pytest_benchmark_json(path: Path) -> None:
                     "operation": "voxel_downsample",
                     "case_id": "smoke-1000",
                     "point_count": 1000,
+                    "requested_point_count": 1000,
+                    "measured_point_count": 1000,
                     "output_points": 120,
                     "comparable": True,
                     "git_sha": "abc123",
@@ -53,6 +55,8 @@ def _write_pytest_benchmark_json(path: Path) -> None:
                     "operation": "voxel_downsample",
                     "case_id": "smoke-1000",
                     "point_count": 1000,
+                    "requested_point_count": 1000,
+                    "measured_point_count": 1000,
                     "output_points": 118,
                     "comparable": True,
                     "git_sha": "abc123",
@@ -75,6 +79,8 @@ def _write_pytest_benchmark_json(path: Path) -> None:
                     "operation": "transform",
                     "case_id": "smoke-1000",
                     "point_count": 1000,
+                    "requested_point_count": 1000,
+                    "measured_point_count": 1000,
                     "comparable": True,
                 },
                 "extra_info": {
@@ -93,6 +99,8 @@ def _write_pytest_benchmark_json(path: Path) -> None:
                     "operation": "voxel_downsample",
                     "case_id": "smoke-10000",
                     "point_count": 10000,
+                    "requested_point_count": 10000,
+                    "measured_point_count": 10000,
                     "output_points": 1200,
                     "comparable": True,
                     "git_sha": "abc123",
@@ -113,6 +121,8 @@ def _write_pytest_benchmark_json(path: Path) -> None:
                     "operation": "voxel_downsample",
                     "case_id": "smoke-10000",
                     "point_count": 10000,
+                    "requested_point_count": 10000,
+                    "measured_point_count": 10000,
                     "output_points": 1180,
                     "comparable": True,
                     "git_sha": "abc123",
@@ -133,6 +143,8 @@ def _write_pytest_benchmark_json(path: Path) -> None:
                     "operation": "typed_concat",
                     "case_id": "smoke-1000",
                     "point_count": 1000,
+                    "requested_point_count": 1000,
+                    "measured_point_count": 1000,
                     "comparable": False,
                     "comparison_status": "pcl_rustic_only",
                     "not_comparable_reason": "Open3D has no typed strict concat.",
@@ -161,6 +173,8 @@ def test_reads_pytest_benchmark_records(tmp_path: Path) -> None:
     ]
     assert records[0].operation == "voxel_downsample"
     assert records[0].point_count == 1000
+    assert records[0].requested_point_count == 1000
+    assert records[0].measured_point_count == 1000
     assert records[0].mean_s == 0.01
     assert records[0].source_json == str(json_path)
     assert records[2].operation == "transform"
@@ -178,6 +192,8 @@ def test_summary_rows_include_speedup_and_exclusions(tmp_path: Path) -> None:
 
     comparable = next(row for row in rows if row["operation"] == "voxel_downsample")
     assert comparable["comparison_status"] == "comparable"
+    assert comparable["requested_point_count"] == "1000"
+    assert comparable["measured_point_count"] == "1000"
     assert comparable["pcl_rustic_mean_s"] == "0.010000"
     assert comparable["open3d_mean_s"] == "0.025000"
     assert comparable["pcl_rustic_stddev_s"] == "0.001000"
@@ -202,6 +218,8 @@ def test_writes_summary_csv(tmp_path: Path) -> None:
 
     text = csv_path.read_text(encoding="utf-8")
     assert "pcl_rustic_vs_open3d_speedup" in text
+    assert "requested_point_count" in text
+    assert "measured_point_count" in text
     assert "pcl_rustic_stddev_s" in text
     assert "voxel_downsample" in text
     assert "typed_concat" in text

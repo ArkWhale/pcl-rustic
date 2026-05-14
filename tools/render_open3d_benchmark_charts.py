@@ -13,6 +13,8 @@ SUMMARY_COLUMNS = [
     "operation",
     "case_id",
     "point_count",
+    "requested_point_count",
+    "measured_point_count",
     "comparison_status",
     "pcl_rustic_mean_s",
     "open3d_mean_s",
@@ -35,6 +37,8 @@ class BenchmarkRecord:
     operation: str
     case_id: str
     point_count: int
+    requested_point_count: int
+    measured_point_count: int
     mean_s: float
     stddev_s: float
     output_points: int | None
@@ -102,6 +106,16 @@ def _record_from_benchmark(path: Path, benchmark: dict[str, Any]) -> BenchmarkRe
         operation=operation,
         case_id=str(params.get("case_id", "")),
         point_count=_optional_int(params.get("point_count")) or 0,
+        requested_point_count=(
+            _optional_int(params.get("requested_point_count"))
+            or _optional_int(params.get("point_count"))
+            or 0
+        ),
+        measured_point_count=(
+            _optional_int(params.get("measured_point_count"))
+            or _optional_int(params.get("point_count"))
+            or 0
+        ),
         mean_s=float(stats.get("mean", 0.0)),
         stddev_s=float(stats.get("stddev", 0.0)),
         output_points=_optional_int(params.get("output_points")),
@@ -136,8 +150,13 @@ def build_summary_rows(records: list[BenchmarkRecord]) -> list[dict[str, str]]:
     return rows
 
 
-def _summary_key(record: BenchmarkRecord) -> tuple[str, str, int]:
-    return (record.operation, record.case_id, record.point_count)
+def _summary_key(record: BenchmarkRecord) -> tuple[str, str, int, int]:
+    return (
+        record.operation,
+        record.case_id,
+        record.requested_point_count,
+        record.measured_point_count,
+    )
 
 
 def _summary_row(records: list[BenchmarkRecord]) -> dict[str, str]:
@@ -173,6 +192,8 @@ def _summary_row(records: list[BenchmarkRecord]) -> dict[str, str]:
         "operation": anchor.operation,
         "case_id": anchor.case_id,
         "point_count": str(anchor.point_count),
+        "requested_point_count": str(anchor.requested_point_count),
+        "measured_point_count": str(anchor.measured_point_count),
         "comparison_status": status,
         "pcl_rustic_mean_s": _format_seconds(pcl.mean_s if pcl else None),
         "open3d_mean_s": _format_seconds(open3d.mean_s if open3d else None),

@@ -57,6 +57,25 @@ reports/benchmarks/last-benchmark.html
 reports/benchmarks/last-benchmark-summary.csv
 ```
 
+Check the RFC-0021 speed budget after rendering the summary:
+
+```bash
+just benchmark-check
+```
+
+`just benchmark-check` runs the first-adoption mode with `--no-baseline`, so it
+checks P0/P1 and states that P3 regression protection starts after an accepted
+baseline is recorded. Once a baseline summary is accepted, pass it explicitly:
+
+```bash
+just benchmark-check baseline=reports/benchmarks/accepted-open3d-baseline-summary.csv
+```
+
+The checker compares comparable rows by operation, case, requested point count,
+and measured point count. Registration rows that use the 10k cap therefore
+record `requested_point_count=1000000` and `measured_point_count=10000` for the
+standard 1M case; capped rows are not counted as measured 1M evidence.
+
 The HTML chart uses one subplot per point-count scale. Each subplot's x-axis is
 the operation name, and library results are shown as colored point markers with
 error bars.

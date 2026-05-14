@@ -46,6 +46,16 @@ benchmark mode='fast' compare='false': build
 benchmark-visualize:
     uv run --group benchmark python tools/render_open3d_benchmark_charts.py reports/benchmarks/last-benchmark.json --html-output reports/benchmarks/last-benchmark.html --summary-output reports/benchmarks/last-benchmark-summary.csv
 
+benchmark-check baseline='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    baseline="{{baseline}}"
+    if [[ -n "${baseline}" ]]; then
+        uv run python tools/check_open3d_speed_budget.py reports/benchmarks/last-benchmark-summary.csv --mode standard --min-1m-speedup 0.80 --min-1m-geomean 1.25 --baseline "${baseline}" --max-regression-ratio 0.10
+    else
+        uv run python tools/check_open3d_speed_budget.py reports/benchmarks/last-benchmark-summary.csv --mode standard --min-1m-speedup 0.80 --min-1m-geomean 1.25 --no-baseline
+    fi
+
 # Run Rust tests
 test-rust:
     cargo test --release

@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from tests.test_open3d_benchmark import (
+    REGISTRATION_POINTS_CAP,
     benchmark_libraries,
     comparable_operations,
     comparison_cases,
@@ -77,6 +78,8 @@ def test_metadata_contract_is_self_describing() -> None:
     assert metadata["operation"] == "voxel_downsample"
     assert metadata["case_id"] == "smoke-1000"
     assert metadata["point_count"] == 1000
+    assert metadata["requested_point_count"] == 1000
+    assert metadata["measured_point_count"] == 1000
     assert metadata["output_points"] == 123
     assert metadata["comparable"] is True
     assert metadata["voxel_size"] == 0.25
@@ -85,6 +88,23 @@ def test_metadata_contract_is_self_describing() -> None:
     assert metadata["pcl_rustic_version"]
     assert "python_version" in metadata
     assert "numpy_version" in metadata
+
+
+def test_registration_metadata_records_capped_measured_point_count() -> None:
+    case = comparison_cases("standard")[-1]
+
+    metadata = make_metadata(
+        library="pcl_rustic",
+        operation="registration_point_to_point",
+        case=case,
+        output_points=REGISTRATION_POINTS_CAP,
+        comparable=True,
+        extra={"measured_point_count": REGISTRATION_POINTS_CAP},
+    )
+
+    assert metadata["point_count"] == 1_000_000
+    assert metadata["requested_point_count"] == 1_000_000
+    assert metadata["measured_point_count"] == REGISTRATION_POINTS_CAP
 
 
 def test_pcl_neighbor_execution_metadata_distinguishes_backend_and_storage() -> None:

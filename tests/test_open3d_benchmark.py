@@ -171,6 +171,8 @@ def make_metadata(
         "operation": operation,
         "case_id": case.case_id,
         "point_count": case.point_count,
+        "requested_point_count": case.point_count,
+        "measured_point_count": case.point_count,
         "output_points": output_points,
         "comparable": comparable,
         "git_sha": git_sha(),
@@ -570,6 +572,7 @@ def run_registration(
         extra = {}
     return output_points, {
         "estimator": operation.replace("registration_", ""),
+        "measured_point_count": limited_case.point_count,
         "cache_policy": "warm",
         **extra,
     }

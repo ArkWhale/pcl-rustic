@@ -179,6 +179,14 @@ Recent RFCs worth knowing about when touching adjacent code:
   `feat | fix | docs | style | refactor | test | chore`. Subjects are written
   in **Chinese**, body and footer optional, no line over 72 chars. Full
   template: `.copilot-commit-message-instructions.md`.
+- Commit each verified minor implementation step instead of batching unrelated
+  work into one large changeset. Prefer one commit for one TDD slice, tooling
+  slice, documentation update, or benchmark-harness change once its focused
+  verification command passes.
+- Include a short body when a commit is not self-evident. Describe the reason
+  for the step, the files or behavior it changes, and the verification command
+  or benchmark artifact that supports it; do not claim performance improvements
+  without RFC-0011 evidence.
 - Run `just fmt && just lint && just test && just pre-commit` before opening a
   PR. The release gauntlet (`just release`) is the strictest local gate.
 - CI runs lint, multi-OS / multi-Python tests, and wheel builds on every PR;
