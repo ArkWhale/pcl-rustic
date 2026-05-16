@@ -23,13 +23,16 @@ test-slow:
     uv run pytest tests/ -v --run-slow
 
 # Run the unified benchmark suite.
-benchmark mode='fast' compare='false': build
+# profile: 'false' (default), 'true' enables cProfile + SVG call graph (requires graphviz `dot`).
+benchmark mode='fast' compare='false' profile='false': build
     #!/usr/bin/env bash
     set -euo pipefail
     raw_mode="{{mode}}"
     raw_compare="{{compare}}"
+    raw_profile="{{profile}}"
     mode="${raw_mode#mode=}"
     compare="${raw_compare#compare=}"
+    profile="${raw_profile#profile=}"
     case "${mode}" in
         fast) benchmark_mode="smoke" ;;
         slow) benchmark_mode="standard" ;;
@@ -41,7 +44,19 @@ benchmark mode='fast' compare='false': build
         false|no|0) ;;
         *) echo "compare must be true or false" >&2; exit 2 ;;
     esac
-    uv run --group benchmark pytest tests/test_open3d_benchmark.py -v -s --run-slow --benchmark-mode="${benchmark_mode}" "${compare_flag[@]}" --benchmark-json=reports/benchmarks/last-benchmark.json --no-cov
+    profile_flags=()
+    case "${profile}" in
+        true|yes|1)
+            mkdir -p reports/profile
+            profile_flags=(--profile --profile-svg --pstats-dir=reports/profile)
+            if ! command -v dot >/dev/null 2>&1; then
+                echo "warning: graphviz 'dot' not found; --profile-svg will fail. Install via 'sudo apt install graphviz'." >&2
+            fi
+            ;;
+        false|no|0) ;;
+        *) echo "profile must be true or false" >&2; exit 2 ;;
+    esac
+    uv run --group benchmark pytest tests/test_open3d_benchmark.py -v -s --run-slow --benchmark-mode="${benchmark_mode}" "${compare_flag[@]}" "${profile_flags[@]}" --benchmark-json=reports/benchmarks/last-benchmark.json --no-cov
 
 benchmark-visualize:
     uv run --group benchmark python tools/render_open3d_benchmark_charts.py reports/benchmarks/last-benchmark.json --html-output reports/benchmarks/last-benchmark.html --summary-output reports/benchmarks/last-benchmark-summary.csv

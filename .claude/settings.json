@@ -8,7 +8,8 @@
       "Bash(cargo test *)",
       "Bash(uv add *)",
       "Bash(/Users/lz/Codes/github/pcl-rustic/.venv/bin/maturin develop *)",
-      "Bash(unset VIRTUAL_ENV)"
+      "Bash(unset VIRTUAL_ENV)",
+      "Bash(uv tree *)"
     ]
   }
 }
