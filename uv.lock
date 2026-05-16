@@ -620,6 +620,15 @@ wheels = [
 ]
 
 [[package]]
+name = "gprof2dot"
+version = "2025.4.14"
+source = { registry = "https://pkgs.d.xiaomi.net/artifactory/api/pypi/pypi-virtual/simple" }
+sdist = { url = "https://pkgs.d.xiaomi.net/artifactory/api/pypi/pypi-virtual/packages/packages/bb/fd/cad13fa1f7a463a607176432c4affa33ea162f02f58cc36de1d40d3e6b48/gprof2dot-2025.4.14.tar.gz", hash = "sha256:35743e2d2ca027bf48fa7cba37021aaf4a27beeae1ae8e05a50b55f1f921a6ce" }
+wheels = [
+    { url = "https://pkgs.d.xiaomi.net/artifactory/api/pypi/pypi-virtual/packages/packages/71/ed/89d760cb25279109b89eb52975a7b5479700d3114a2421ce735bfb2e7513/gprof2dot-2025.4.14-py3-none-any.whl", hash = "sha256:0742e4c0b4409a5e8777e739388a11e1ed3750be86895655312ea7c20bd0090e" },
+]
+
+[[package]]
 name = "idna"
 version = "3.11"
 source = { registry = "https://pkgs.d.xiaomi.net/artifactory/api/pypi/pypi-virtual/simple" }
@@ -1556,6 +1565,7 @@ benchmark = [
     { name = "open3d" },
     { name = "plotly" },
     { name = "pytest-benchmark" },
+    { name = "pytest-profiling" },
 ]
 dev = [
     { name = "laspy" },
@@ -1580,6 +1590,7 @@ benchmark = [
     { name = "open3d", specifier = ">=0.18.0" },
     { name = "plotly", specifier = ">=5.24.0" },
     { name = "pytest-benchmark", specifier = ">=5.0.0" },
+    { name = "pytest-profiling", specifier = ">=1.8.1" },
 ]
 dev = [
     { name = "laspy", specifier = ">=2.7.0" },
@@ -1817,6 +1828,20 @@ dependencies = [
 sdist = { url = "https://pkgs.d.xiaomi.net/artifactory/api/pypi/pypi-virtual/packages/packages/5e/f7/c933acc76f5208b3b00089573cf6a2bc26dc80a8aece8f52bb7d6b1855ca/pytest_cov-7.0.0.tar.gz", hash = "sha256:33c97eda2e049a0c5298e91f519302a1334c26ac65c1a483d6206fd458361af1" }
 wheels = [
     { url = "https://pkgs.d.xiaomi.net/artifactory/api/pypi/pypi-virtual/packages/packages/ee/49/1377b49de7d0c1ce41292161ea0f721913fa8722c19fb9c1e3aa0367eecb/pytest_cov-7.0.0-py3-none-any.whl", hash = "sha256:3b8e9558b16cc1479da72058bdecf8073661c7f57f7d3c5f22a1c23507f2d861" },
+]
+
+[[package]]
+name = "pytest-profiling"
+version = "1.8.1"
+source = { registry = "https://pkgs.d.xiaomi.net/artifactory/api/pypi/pypi-virtual/simple" }
+dependencies = [
+    { name = "gprof2dot" },
+    { name = "pytest" },
+    { name = "six" },
+]
+sdist = { url = "https://pkgs.d.xiaomi.net/artifactory/api/pypi/pypi-virtual/packages/packages/44/74/806cafd6f2108d37979ec71e73b2ff7f7db88eabd19d3b79c5d6cc229c36/pytest-profiling-1.8.1.tar.gz", hash = "sha256:3f171fa69d5c82fa9aab76d66abd5f59da69135c37d6ae5bf7557f1b154cb08d" }
+wheels = [
+    { url = "https://pkgs.d.xiaomi.net/artifactory/api/pypi/pypi-virtual/packages/packages/e3/ac/c428c66241a144617a8af7a28e2e055e1438d23b949b62ac4b401a69fb79/pytest_profiling-1.8.1-py3-none-any.whl", hash = "sha256:3dd8713a96298b42d83de8f5951df3ada3e61b3e5d2a06956684175529e17aea" },
 ]
 
 [[package]]
